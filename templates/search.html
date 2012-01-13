@@ -34,9 +34,9 @@ em { background: yellow; font-style: normal; }
             {% if doc.mediatype=='movies' %}
                 <td></td>
             {% else %}
-                <td valign="top" rowspan="2">
+                <td valign="top" rowspan="2" align="right">
                     {% if doc.mediatype == 'texts' and doc.scanner %}
-                        <a href="{{details}}"><img src="http://www.archive.org/download/{{ doc.identifier }}/page/{{doc.identifier}}_cover_thumb.jpg"></a>
+                        <a href="{{details}}"><img src="http://www.archive.org/download/{{ doc.identifier }}/page/{{doc.identifier}}_cover_h100.jpg" height="150"></a>
                     {% endif %}
                 </td>
             {% endif %}
@@ -77,15 +77,16 @@ em { background: yellow; font-style: normal; }
     {% set fc = results.facet_counts.facet_fields %}
     {% for k in facet_fields %}
         {% if fc.get(k) %}
-            <h2>{{ k }}</h2>
+            {% set facet_heading = 'media type' if k == 'mediatype' else k.replace('_facet', '') %}
+            <h2>{{ facet_heading }}</h2>
             {% for key, count in fc[k] %}
                 {% set label=lang_map.get(key.lower(), key) if k == 'language_facet' else key %}
-                <a href="?q={{quote(q)}}&amp;{{k}}={{quote(key)}}">{{ label |truncate(48) }}</a> ({{ comma(count) }})<br>
+                <span><a href="?q={{quote(q)}}&amp;{{k}}={{quote(key)}}">{{ label |truncate(48) }}</a></span> ({{ comma(count) }})<br>
             {% endfor %}
         {% endif %}
     {% endfor %}
 
-        <h2>Date</h2>
+        <h2>decade</h2>
         {% for i in results.facet_counts.facet_ranges.date.counts | reverse %}
             {% set start_year = int(i[0][:4]) %}
             {% set end_year = 'now' if loop.first else start_year + year_gap %}

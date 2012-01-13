@@ -33,7 +33,7 @@ def find_item(ia):
             return (ia_host, ia_path)
     raise FindItemError
 
-facet_fields = ['noindex', 'subject_facet', 'language_facet', 'mediatype', 'collection', 'publisher_facet']
+facet_fields = ['noindex', 'mediatype', 'collection', 'language_facet', 'subject_facet', 'publisher_facet']
 year_gap = 10
 
 results_per_page = 30 
@@ -43,7 +43,7 @@ solr_select_url = 'http://localhost:8983/solr/select?wt=json' + \
     '&defType=edismax' + \
     '&fl=identifier,title,date,subject,collection,scanner,mediatype,description,noindex,score' + \
     '&rows=' + str(results_per_page) + \
-    '&facet=true&' + '&'.join('facet.field='+f for f in facet_fields) +  '&facet.limit=50&facet.mincount=2' + \
+    '&facet=true&facet.limit=50&facet.mincount=2' + \
     '&facet.range=date&facet.range.start=0000-01-01T00:00:00Z&facet.range.end=2015-01-01T00:00:00Z&facet.range.gap=%2B' + str(year_gap) + 'YEAR' + \
     '&hl=true&hl.fl=title,subject,collection,description' + \
     '&bq=(*:* -collection:ourmedia -collection:opensource*)^10' + \
@@ -135,12 +135,13 @@ def do_search():
     first_page_in_set = None
     last_page_in_set = None
     facet_args = [(f, request.args[f]) for f in facet_fields if f in request.args]
+    facet_args_dict = dict(facet_args)
     page = 1
     if q:
         quote_q = quote(q)
         page = int(request.args.get('page', 1))
         start = results_per_page * (page-1)
-        fq = ''.join('&fq=' + quote('%s:"%s"' % (f, request.args[f])) for f in facet_fields if f in request.args)
+        fq = ''.join('&fq=' + quote('{!tag=%s}%s:"%s"' % (f, f, request.args[f])) for f in facet_fields if f in request.args)
         date_range = request.args.get('date_range')
         date_facet = request.args.get('date_facet')
         if date_range:
@@ -149,10 +150,9 @@ def do_search():
                 start_year, end_year = m.groups()
                 fq += '&fq=' + quote('date:[%s-01-01T00:00:00Z TO %s-01-01T00:00:00Z]' % (start_year, end_year))
         elif date_facet:
-            start_year = int(date_facet)
-            fq += '&fq=' + quote('date:[%d-01-01T00:00:00Z TO %d-01-01T00:00:00Z]' % (start_year, start_year+year_gap))
+            fq += '&fq=' + quote('date:[%s-01-01T00:00:00Z TO %s-01-01T00:00:00Z+%dYEAR]' % (date_facet, date_facet, year_gap))
 
-        url = solr_select_url + '&q=' + quote(q) + '&start=%d' % start + fq
+        url = solr_select_url + '&q=' + quote(q) + '&start=%d' % start + fq + ''.join('&facet.field='+('{!ex=' + f + '}' if f in facet_args_dict else '') + f for f in facet_fields)
         f = urlopen(url)
         reply = f.read()
         try:
