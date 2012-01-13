@@ -123,6 +123,8 @@ def get_movie_thumb(identifier):
         'imgs': thumbs,
     }
 
+re_date_range = re.compile('^(\d+)-(\d+)$')
+
 @app.route("/")
 def do_search():
     q = request.args.get('q')
@@ -138,7 +140,18 @@ def do_search():
         quote_q = quote(q)
         page = int(request.args.get('page', 1))
         start = results_per_page * (page-1)
-        fq = ''.join('&fq=%s:"%s"' % (f, request.args[f]) for f in facet_fields if f in request.args)
+        fq = ''.join('&fq=' + quote('%s:"%s"' % (f, request.args[f])) for f in facet_fields if f in request.args)
+        date_range = request.args.get('date_range')
+        date_facet = request.args.get('date_facet')
+        if date_range:
+            m = re_date_range.match(date_range)
+            if m:
+                start_year, end_year = m.groups()
+                fq += '&fq=' + quote('date:[%s-01-01T00:00:00Z TO %s-01-01T00:00:00Z]' % (start_year, end_year))
+        elif date_facet:
+            start_year = int(date_facet)
+            fq += '&fq=' + quote('date:[%d-01-01T00:00:00Z TO %d-01-01T00:00:00Z]' % (start_year, start_year+year_gap))
+
         url = solr_select_url + '&q=' + quote(q) + '&start=%d' % start + fq
         f = urlopen(url)
         reply = f.read()

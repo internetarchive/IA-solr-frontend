@@ -76,7 +76,7 @@ em { background: yellow; font-style: normal; }
     <td nowrap="nowrap" valign="top">
     {% set fc = results.facet_counts.facet_fields %}
     {% for k in facet_fields %}
-        {% if k in fc %}
+        {% if fc.get(k) %}
             <h2>{{ k }}</h2>
             {% for key, count in fc[k] %}
                 {% set label=lang_map.get(key.lower(), key) if k == 'language_facet' else key %}
@@ -89,7 +89,8 @@ em { background: yellow; font-style: normal; }
         {% for i in results.facet_counts.facet_ranges.date.counts | reverse %}
             {% set start_year = int(i[0][:4]) %}
             {% set end_year = 'now' if loop.first else start_year + year_gap %}
-            <a href="?q={{quote(q)}}&amp;{{'date'}}={{quote(i[0][:4])}}">{{start_year}}-{{end_year}}</a> ({{ comma(i[1]) }})<br>
+            {% set end_year = start_year + year_gap %}
+            <a href="?q={{quote(q)}}&amp;date_facet={{quote(i[0][:4])}}">{{start_year}}-{{end_year}}</a> ({{ comma(i[1]) }})<br>
         {% endfor %}
     </td></tr></table>
 
