@@ -1,0 +1,116 @@
+<html>
+<head>
+<title>Search</title>
+<style>
+body { font-family: serif; }
+em { background: yellow; font-style: normal; }
+</style>
+</head>
+<body>
+<h1>Search</h1>
+<form><input name="q" value="{{q or ''}}" size="60">
+<input type="submit" value="Search">
+</form>
+
+{% if results %}
+    {{ comma(results.response.numFound) }} results<p>
+    <!--<pre>{{ results.highlighting | pprint }}</pre> -->
+    <table>
+    <tr><td valign="top">
+    {% set mediatypes = ['texts', 'movies', 'audio', 'image', 'web', 'etree', 'software'] %}
+    <table>
+    {% for doc in results.response.docs %}
+        {% set details = "http://www.archive.org/details/" + doc.identifier %}
+        {% set hl = results.highlighting[doc.identifier] %}
+        <tr>
+            <td valign="top">
+            {% if doc.mediatype in mediatypes %}
+                <img src="http://www.archive.org/images/mediatype_{{doc.mediatype|lower}}.gif">
+            {% endif %}
+            <a href="{{ details }}">{% for t in hl.title or doc.title %}{{t|safe}}{%endfor%}</a> {{ ', '.join(doc.creator) }}
+            {% if doc.noindex %}<span style="padding:2px;background:red;color:white">noindex</span>{% endif %}
+            </td>
+
+            {% if doc.mediatype=='movies' %}
+                <td></td>
+            {% else %}
+                <td valign="top" rowspan="2">
+                    {% if doc.mediatype == 'texts' and doc.scanner %}
+                        <a href="{{details}}"><img src="http://www.archive.org/download/{{ doc.identifier }}/page/{{doc.identifier}}_cover_thumb.jpg"></a>
+                    {% endif %}
+                </td>
+            {% endif %}
+        </tr>
+        <tr>
+        {% if doc.mediatype=='movies' %}
+            <td colspan="2">
+            {% set thumb = get_movie_thumb(doc.identifier) %}
+            {% if thumb %}
+                {% for img in pick_best(thumb.imgs, num=4) %}
+                    <a href="{{details}}"><img src="{{thumb.url + img }}"></a>
+                {% endfor %}
+                <br>
+            {% endif %}
+        {% else %}
+            <td>
+        {% endif %}
+        {% for desc in hl.description %}
+            {{ desc | safe }}<br>
+        {% endfor %}
+        {% if doc.date %}<b>Date</b>: {{doc.date[:10] }}<br>{% endif %}
+        {% if doc.subject %}<b>Keywords</b>: {{'; '.join(hl.subject or doc.subject) | safe }}<br>{% endif %}
+        {% if doc.collection %}<b>Collections</b>: 
+            {% for collection in doc.collection %}
+                <a href="?q={{quote(q)}}&amp;collection={{quote(collection)}}">{{collection}}</a>;
+            {% endfor %}
+            <br>
+        {% endif %}
+        <br>
+
+        </td>
+        </tr>
+    {% endfor %}
+    </table>
+    </td>
+
+    <td nowrap="nowrap" valign="top">
+    {% set fc = results.facet_counts.facet_fields %}
+    {% for k in facet_fields %}
+        {% if k in fc %}
+            <h2>{{ k }}</h2>
+            {% for key, count in fc[k] %}
+                {% set label=lang_map.get(key.lower(), key) if k == 'language_facet' else key %}
+                <a href="?q={{quote(q)}}&amp;{{k}}={{quote(key)}}">{{ label |truncate(48) }}</a> ({{ comma(count) }})<br>
+            {% endfor %}
+        {% endif %}
+    {% endfor %}
+
+        <h2>Date</h2>
+        {% for i in results.facet_counts.facet_ranges.date.counts | reverse %}
+            {% set start_year = int(i[0][:4]) %}
+            {% set end_year = 'now' if loop.first else start_year + year_gap %}
+            <a href="?q={{quote(q)}}&amp;{{'date'}}={{quote(i[0][:4])}}">{{start_year}}-{{end_year}}</a> ({{ comma(i[1]) }})<br>
+        {% endfor %}
+    </td></tr></table>
+
+    Pages:
+
+    {% if page != 1 %}
+        <a href="?q={{quote(q)}}&page=1">&laquo;&nbsp;First</a>
+        <a href="?q={{quote(q)}}&page={{page-1}}">&lt;&nbsp;Previous</a>
+    {% endif %}
+    {% for p in range(first_page_in_set, last_page_in_set+1) %}
+        {% if p == page %}
+            <span class="this">{{p}}</span>
+        {% else %}
+            <a href="?q={{quote(q)}}&page={{p}}">{{p}}</a>
+        {% endif %}
+    {% endfor %}
+    {% if page < pages %}
+        <a href="?q={{quote(q)}}&page={{page+1}}">Next&nbsp;&gt;</a>
+        <a href="?q={{quote(q)}}&page={{pages}}">Last&nbsp;&raquo;</a>
+    {% endif %}
+
+{% endif %}
+</body>
+</html>
