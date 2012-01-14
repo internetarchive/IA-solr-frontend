@@ -4,6 +4,7 @@
 <style>
 body { font-family: serif; }
 em { background: yellow; font-style: normal; }
+span.selected { background: #ccc; padding: 2px; }
 </style>
 </head>
 <body>
@@ -13,8 +14,8 @@ em { background: yellow; font-style: normal; }
 </form>
 
 {% if results %}
+    <!-- {{url|safe}} -->
     {{ comma(results.response.numFound) }} results<p>
-    <!--<pre>{{ results.highlighting | pprint }}</pre> -->
     <table>
     <tr><td valign="top">
     {% set mediatypes = ['texts', 'movies', 'audio', 'image', 'web', 'etree', 'software'] %}
@@ -37,6 +38,11 @@ em { background: yellow; font-style: normal; }
                 <td valign="top" rowspan="2" align="right">
                     {% if doc.mediatype == 'texts' and doc.scanner %}
                         <a href="{{details}}"><img src="http://www.archive.org/download/{{ doc.identifier }}/page/{{doc.identifier}}_cover_h100.jpg" height="150"></a>
+                    {% elif doc.mediatype == 'image' %}
+                        {% set thumb_url = get_img_thumb(doc.identifier) %}
+                        {% if thumb_url %}
+                            <a href="{{details}}"><img src="{{thumb_url}}"></a>
+                        {% endif %}
                     {% endif %}
                 </td>
             {% endif %}
@@ -61,7 +67,7 @@ em { background: yellow; font-style: normal; }
         {% if doc.subject %}<b>Keywords</b>: {{'; '.join(hl.subject or doc.subject) | safe }}<br>{% endif %}
         {% if doc.collection %}<b>Collections</b>: 
             {% for collection in doc.collection %}
-                <a href="?q={{quote(q)}}&amp;collection={{quote(collection)}}">{{collection}}</a>;
+                <a href="?{{changequery({'page':None,'collection':collection})}}">{{collection}}</a>;
             {% endfor %}
             <br>
         {% endif %}
@@ -81,7 +87,11 @@ em { background: yellow; font-style: normal; }
             <h2>{{ facet_heading }}</h2>
             {% for key, count in fc[k] %}
                 {% set label=lang_map.get(key.lower(), key) if k == 'language_facet' else key %}
-                <span><a href="?q={{quote(q)}}&amp;{{k}}={{quote(key)}}">{{ label |truncate(48) }}</a></span> ({{ comma(count) }})<br>
+                {% if key in facet_args_dict[k] %}
+                    <span class="selected"><a href="?{{changequery({'page':None,k:None})}}">{{ label |truncate(48) }}</a> ({{ comma(count) }})</span><br>
+                {% else %}
+                    <a href="?{{changequery({'page':None,k:key})}}">{{ label |truncate(48) }}</a> ({{ comma(count) }})<br>
+                {% endif %}
             {% endfor %}
         {% endif %}
     {% endfor %}
@@ -91,26 +101,26 @@ em { background: yellow; font-style: normal; }
             {% set start_year = int(i[0][:4]) %}
             {% set end_year = 'now' if loop.first else start_year + year_gap %}
             {% set end_year = start_year + year_gap %}
-            <a href="?q={{quote(q)}}&amp;date_facet={{quote(i[0][:4])}}">{{start_year}}-{{end_year}}</a> ({{ comma(i[1]) }})<br>
+            <a href="?{{changequery({'page':None,'date_facet':i[0][:4]})}}">{{start_year}}-{{end_year}}</a> ({{ comma(i[1]) }})<br>
         {% endfor %}
     </td></tr></table>
 
     Pages:
 
     {% if page != 1 %}
-        <a href="?q={{quote(q)}}&page=1">&laquo;&nbsp;First</a>
-        <a href="?q={{quote(q)}}&page={{page-1}}">&lt;&nbsp;Previous</a>
+        <a href="?{{changequery({'page':None})}}">&laquo;&nbsp;First</a>
+        <a href="?{{changequery({'page':page-1})}}">&lt;&nbsp;Previous</a>
     {% endif %}
     {% for p in range(first_page_in_set, last_page_in_set+1) %}
         {% if p == page %}
             <span class="this">{{p}}</span>
         {% else %}
-            <a href="?q={{quote(q)}}&page={{p}}">{{p}}</a>
+            <a href="?{{changequery({'page':p})}}">{{p}}</a>
         {% endif %}
     {% endfor %}
     {% if page < pages %}
-        <a href="?q={{quote(q)}}&page={{page+1}}">Next&nbsp;&gt;</a>
-        <a href="?q={{quote(q)}}&page={{pages}}">Last&nbsp;&raquo;</a>
+        <a href="?{{changequery({'page':page+1})}}">Next&nbsp;&gt;</a>
+        <a href="?{{changequery({'page':pages})}}">Last&nbsp;&raquo;</a>
     {% endif %}
 
 {% endif %}

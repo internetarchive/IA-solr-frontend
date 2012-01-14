@@ -36,14 +36,14 @@ def find_item(ia):
 facet_fields = ['noindex', 'mediatype', 'collection', 'language_facet', 'subject_facet', 'publisher_facet']
 year_gap = 10
 
-results_per_page = 30 
+results_per_page = 20 
 
 solr_select_url = 'http://localhost:8983/solr/select?wt=json' + \
     '&json.nl=arrarr' + \
     '&defType=edismax' + \
     '&fl=identifier,title,date,subject,collection,scanner,mediatype,description,noindex,score' + \
     '&rows=' + str(results_per_page) + \
-    '&facet=true&facet.limit=50&facet.mincount=2' + \
+    '&facet=true&facet.limit=30&facet.mincount=2' + \
     '&facet.range=date&facet.range.start=0000-01-01T00:00:00Z&facet.range.end=2015-01-01T00:00:00Z&facet.range.gap=%2B' + str(year_gap) + 'YEAR' + \
     '&hl=true&hl.fl=title,subject,collection,description' + \
     '&bq=(*:* -collection:ourmedia -collection:opensource*)^10' + \
@@ -99,7 +99,7 @@ def test_pick_best():
     assert pick_best(range(8)) == [3, 4, 5, 6]
     assert pick_best(range(9)) == [3, 4, 5, 6]
 
-re_thumb_link = re.compile('<a href="(.+\.thumbs/)">')
+re_thumb_dir_link = re.compile('<a href="(.+\.thumbs/)">')
 re_link = re.compile('<a href="(.+)">')
 def get_movie_thumb(identifier):
     try:
@@ -107,7 +107,7 @@ def get_movie_thumb(identifier):
     except FindItemError:
         return
     for line in urlopen('http://' + host + path):
-        m = re_thumb_link.match(line)
+        m = re_thumb_dir_link.match(line)
         if m:
             thumb_dir = m.group(1)
             break
@@ -122,6 +122,34 @@ def get_movie_thumb(identifier):
         'url': 'http://' + host + path + '/' + thumb_dir + '/',
         'imgs': thumbs,
     }
+
+re_thumb_link = re.compile('<a href="(.+thumb.*)">')
+
+def changequery(new_args):
+    args = dict((k, v) for k, v in request.args.items() if v and k not in new_args)
+    args.update(dict((k, v) for k, v in new_args.items() if v is not None))
+    return '&'.join('%s=%s' % (k, v) for k, v in args.items())
+
+def test_changequery():
+    with app.test_client() as c:
+        rv = c.get('/?q=test&mediatype=movies&language=eng')
+        assert request.args['q'] == 'test'
+        assert request.args['mediatype'] == 'movies'
+        assert request.args['language'] == 'eng'
+        url = changequery(collection='nasa')
+        assert url == 'q=test&mediatype=movies&language=eng&collection=nasa'
+        url = changequery(language=None)
+        assert url == 'q=test&mediatype=movies'
+
+def get_img_thumb(identifier):
+    try:
+        host, path = find_item(identifier)
+    except FindItemError:
+        return
+    for line in urlopen('http://' + host + path):
+        m = re_thumb_link.match(line)
+        if m:
+            return 'http://' + host + path + '/' + m.group(1)
 
 re_date_range = re.compile('^(\d+)-(\d+)$')
 
@@ -180,7 +208,8 @@ def do_search():
     return render_template('search.html', q=q, page=page, results=results, \
             results_per_page=results_per_page, pages=pages, first_page_in_set=first_page_in_set, last_page_in_set=last_page_in_set, \
             quote=quote, comma=comma, int=int, facet_fields=facet_fields, lang_map=lang_map, facet_args=facet_args, \
-            get_movie_thumb=get_movie_thumb, year_gap=year_gap, find_item=find_item, enumerate=enumerate, len=len, pick_best=pick_best)
+            get_movie_thumb=get_movie_thumb, year_gap=year_gap, find_item=find_item, enumerate=enumerate, len=len, pick_best=pick_best, url=url, facet_args_dict=facet_args_dict,\
+            get_img_thumb = get_img_thumb, changequery=changequery)
     
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8081, debug=True)
