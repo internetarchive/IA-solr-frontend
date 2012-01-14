@@ -28,7 +28,17 @@ span.selected { background: #ccc; padding: 2px; }
             {% if doc.mediatype in mediatypes %}
                 <img src="http://www.archive.org/images/mediatype_{{doc.mediatype|lower}}.gif">
             {% endif %}
-            <a href="{{ details }}">{% for t in hl.title or doc.title %}{{t|safe}}{%endfor%}</a> {{ ', '.join(doc.creator) }}
+            <a href="{{ details }}">
+            {% if hl.title %}
+                {% for t in hl.title %}
+                    {% for token_type, token in token_hl(t) %}
+                        {% if token_type == 'text' %}{{token}}{% else %}<em>{{ token }}</em>{% endif %}
+                    {% endfor %}
+                {% endfor %}
+            {% else %}
+                {{ '; '.join(doc.title) }}
+            {% endif %}
+            </a> {{ ', '.join(doc.creator) }}
             {% if doc.noindex %}<span style="padding:2px;background:red;color:white">noindex</span>{% endif %}
             </td>
 
@@ -61,10 +71,22 @@ span.selected { background: #ccc; padding: 2px; }
             <td>
         {% endif %}
         {% for desc in hl.description %}
-            {{ desc | safe }}<br>
+            {% for token_type, token in token_hl(desc) %}
+                {% if token_type == 'text' %}{{token}}{% else %}<em>{{ token }}</em>{% endif %}
+            {% endfor %}<br>
         {% endfor %}
         {% if doc.date %}<b>Date</b>: {{doc.date[:10] }}<br>{% endif %}
-        {% if doc.subject %}<b>Keywords</b>: {{'; '.join(hl.subject or doc.subject) | safe }}<br>{% endif %}
+        {% if doc.subject %}<b>Keywords</b>:
+            {% if hl.subject %}
+                {% for s in hl.subject %}
+                    {% for token_type, token in token_hl(s) %}
+                        {% if token_type == 'text' %}{{token}}{% else %}<em>{{ token }}</em>{% endif %}
+                    {% endfor %}<br>
+                {% endfor %}
+            {% else %}
+                {{'; '.join(doc.subject) }}
+            {% endif %}<br>
+        {% endif %}
         {% if doc.collection %}<b>Collections</b>: 
             {% for collection in doc.collection %}
                 <a href="?{{changequery({'page':None,'collection':collection})}}">{{collection}}</a>;

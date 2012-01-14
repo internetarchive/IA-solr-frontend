@@ -38,14 +38,17 @@ year_gap = 10
 
 results_per_page = 20 
 
+def quote(s):
+    return quote_plus(s.encode('utf-8'))
+
 solr_select_url = 'http://localhost:8983/solr/select?wt=json' + \
     '&json.nl=arrarr' + \
     '&defType=edismax' + \
-    '&fl=identifier,title,date,subject,collection,scanner,mediatype,description,noindex,score' + \
+    '&fl=identifier,creator,title,date,subject,collection,scanner,mediatype,description,noindex,score' + \
     '&rows=' + str(results_per_page) + \
     '&facet=true&facet.limit=30&facet.mincount=2' + \
     '&facet.range=date&facet.range.start=0000-01-01T00:00:00Z&facet.range.end=2015-01-01T00:00:00Z&facet.range.gap=%2B' + str(year_gap) + 'YEAR' + \
-    '&hl=true&hl.fl=title,subject,collection,description' + \
+    '&hl=true&hl.fl=title,creator,subject,collection,description&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}') + \
     '&bq=(*:* -collection:ourmedia -collection:opensource*)^10' + \
     '&q.op=AND'
 
@@ -62,9 +65,6 @@ lang_map = {
     'dut': 'Dutch',
     'ara': 'Arabic',
 }
-
-def quote(s):
-    return quote_plus(s.encode('utf-8'))
 
 def test_quote():
     assert quote('x') == 'x'
@@ -98,6 +98,27 @@ def test_pick_best():
     assert pick_best(range(7)) == [1,2,3,4]
     assert pick_best(range(8)) == [3, 4, 5, 6]
     assert pick_best(range(9)) == [3, 4, 5, 6]
+
+def token_hl(s):
+    while '{{{' in s:
+        start = s.find('{{{')
+        end = s.find('}}}', start)
+        if start:
+            yield ('text', s[:start])
+        yield ('hl', s[start+3:end])
+        s = s[end+3:]
+    if s:
+        yield ('text', s)
+
+def test_token_hl():
+    l = list(token_hl('abc'))
+    assert l == [('text', 'abc')]
+    l = list(token_hl('{{{aaa}}} bbb'))
+    assert l == [('hl', 'aaa'), ('text', ' bbb')]
+    l = list(token_hl('aaa {{{bbb}}}'))
+    assert l == [('text', 'aaa '), ('hl', 'bbb')]
+    l = list(token_hl('aaa {{{bbb}}} ccc'))
+    assert l == [('text', 'aaa '), ('hl', 'bbb'), ('text', ' ccc')]
 
 re_thumb_dir_link = re.compile('<a href="(.+\.thumbs/)">')
 re_link = re.compile('<a href="(.+)">')
@@ -136,9 +157,9 @@ def test_changequery():
         assert request.args['q'] == 'test'
         assert request.args['mediatype'] == 'movies'
         assert request.args['language'] == 'eng'
-        url = changequery(collection='nasa')
+        url = changequery({'collection':'nasa'})
         assert url == 'q=test&mediatype=movies&language=eng&collection=nasa'
-        url = changequery(language=None)
+        url = changequery({'language':None})
         assert url == 'q=test&mediatype=movies'
 
 def get_img_thumb(identifier):
@@ -209,7 +230,7 @@ def do_search():
             results_per_page=results_per_page, pages=pages, first_page_in_set=first_page_in_set, last_page_in_set=last_page_in_set, \
             quote=quote, comma=comma, int=int, facet_fields=facet_fields, lang_map=lang_map, facet_args=facet_args, \
             get_movie_thumb=get_movie_thumb, year_gap=year_gap, find_item=find_item, enumerate=enumerate, len=len, pick_best=pick_best, url=url, facet_args_dict=facet_args_dict,\
-            get_img_thumb = get_img_thumb, changequery=changequery)
+            get_img_thumb = get_img_thumb, changequery=changequery, token_hl=token_hl)
     
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8081, debug=True)
