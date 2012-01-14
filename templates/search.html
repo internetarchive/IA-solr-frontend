@@ -20,7 +20,7 @@ span.selected { background: #ccc; padding: 2px; }
         {% for key, count in fc[k] %}
             {% set label=lang_map.get(key.lower(), key) if k == 'language_facet' else key %}
             {% if key in facet_args_dict[k] %}
-                <span class="selected"><a href="?{{changequery({'page':None,k:None})}}">{{ label |truncate(48) }}</a> ({{ comma(count) }})</span><br>
+                <a href="?{{changequery({'page':None,k:None})}}">[x]</a> <b>{{ label |truncate(48) }}</b> ({{ comma(count) }}) <br>
             {% else %}
                 <a href="?{{changequery({'page':None,k:key})}}">{{ label |truncate(48) }}</a> ({{ comma(count) }})<br>
             {% endif %}
@@ -31,7 +31,8 @@ span.selected { background: #ccc; padding: 2px; }
 
 {% if results %}
     <!-- {{url|safe}} -->
-    {{ comma(results.response.numFound) }} results<p>
+    {{ comma(results.response.numFound) }} results<br>
+    solr time: {{ '%.4f' | format(t_solr) }} seconds<p>
     <table>
     <tr><td valign="top">
     {% set mediatypes = ['texts', 'movies', 'audio', 'image', 'web', 'etree', 'software'] %}
@@ -160,16 +161,16 @@ span.selected { background: #ccc; padding: 2px; }
         <a href="?{{changequery({'page':None})}}">&laquo;&nbsp;First</a>
         <a href="?{{changequery({'page':page-1})}}">&lt;&nbsp;Previous</a>
     {% endif %}
-    {% for p in range(first_page_in_set, last_page_in_set+1) %}
+    {% for p in pager.page_list %}
         {% if p == page %}
             <span class="this">{{p}}</span>
         {% else %}
             <a href="?{{changequery({'page':p})}}">{{p}}</a>
         {% endif %}
     {% endfor %}
-    {% if page < pages %}
+    {% if page < pager.pages %}
         <a href="?{{changequery({'page':page+1})}}">Next&nbsp;&gt;</a>
-        <a href="?{{changequery({'page':pages})}}">Last&nbsp;&raquo;</a>
+        <a href="?{{changequery({'page':pager.pages})}}">Last&nbsp;&raquo;</a>
     {% endif %}
 
 {% endif %}

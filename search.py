@@ -1,8 +1,9 @@
 from flask import Flask, render_template, request
 from urllib import urlopen, quote_plus
-import json, locale, sys, re, time
+import json, locale, sys, re
 
 from socket import socket, AF_INET, SOCK_DGRAM, SOL_UDP, SO_BROADCAST, timeout
+from time import time
 
 app = Flask(__name__)
 
@@ -174,13 +175,33 @@ def get_img_thumb(identifier):
 
 re_date_range = re.compile('^(\d+)-(\d+)$')
 
+def build_pager(num_found, page, pages_in_set = 10):
+    pages = (num_found / results_per_page) + 1
+    half = pages_in_set/2
+    if pages < pages_in_set:
+        first_page_in_set = 1
+        last_page_in_set = pages
+    if page < half:
+        first_page_in_set = 1
+        last_page_in_set = min((pages_in_set, pages))
+    elif page > (pages-half):
+        first_page_in_set = max((pages-pages_in_set, 1))
+        last_page_in_set = pages
+    else:
+        first_page_in_set = max((page-half, 1))
+        last_page_in_set = page+half
+    return {
+        'pages': pages,
+        'page_list': range(first_page_in_set, last_page_in_set+1),
+    }
+
 @app.route("/")
 def do_search():
     q = request.args.get('q')
-    pages_in_set = 10
     if not q:
         return render_template('search.html')
     facet_args = [(f, request.args[f]) for f in facet_fields if f in request.args]
+    facet_args_dict = dict(facet_args)
     quote_q = quote(q)
     page = int(request.args.get('page', 1))
     start = results_per_page * (page-1)
@@ -199,34 +220,20 @@ def do_search():
     t0_solr = time()
     f = urlopen(url)
     reply = f.read()
-    t_solr = time() - t_solr
+    t_solr = time() - t0_solr
     try:
         results = json.loads(reply)
     except ValueError:
         return reply
 
-    num_found = results['response']['numFound']
-    pages = (num_found / results_per_page) + 1
-    half = pages_in_set/2
-    if pages < pages_in_set:
-        first_page_in_set = 1
-        last_page_in_set = pages
-    if page < half:
-        first_page_in_set = 1
-        last_page_in_set = min((pages_in_set, pages))
-    elif page > (pages-half):
-        first_page_in_set = max((pages-pages_in_set, 1))
-        last_page_in_set = pages
-    else:
-        first_page_in_set = max((page-half, 1))
-        last_page_in_set = page+half
+    pager = build_pager(results['response']['numFound'], page)
 
     return render_template('search.html', q=q, page=page, results=results, \
-            results_per_page=results_per_page, pages=pages, first_page_in_set=first_page_in_set, last_page_in_set=last_page_in_set, \
+            results_per_page=results_per_page, pager=pager, \
             quote=quote, comma=comma, int=int, facet_fields=facet_fields, lang_map=lang_map, facet_args=facet_args, \
             get_movie_thumb=get_movie_thumb, year_gap=year_gap, find_item=find_item, enumerate=enumerate, len=len, pick_best=pick_best, url=url, \
             facet_args_dict=facet_args_dict,\
-            get_img_thumb = get_img_thumb, changequery=changequery, token_hl=token_hl)
+            get_img_thumb = get_img_thumb, changequery=changequery, token_hl=token_hl, t_solr=t_solr)
     
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8081, debug=True)
