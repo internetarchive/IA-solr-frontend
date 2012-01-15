@@ -1,0 +1,23 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<title>{{ identifier }} - more like this</title>
+</head>
+<body>
+<h2>item</h2>
+{% set doc = mlt.match.docs[0] %}
+{% set details = "http://www.archive.org/details/" + doc.identifier %}
+<a href="{{ details }}">{{ doc.title }}</a>
+
+<h2>similar</h2>
+<ul>
+{% for doc in mlt.response.docs %}
+{% set details = "http://www.archive.org/details/" + doc.identifier %}
+<li><a href="{{ details }}">{{ doc.title }}</a>
+(<a href="{{url_for('view_mlt', identifier=doc.identifier)}}">more like this</a>)
+{% endfor %}
+</ul>
+</body>
+</html>
+

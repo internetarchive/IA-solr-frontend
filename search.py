@@ -41,7 +41,7 @@ results_per_page = 30
 def quote(s):
     return quote_plus(s.encode('utf-8')) if not isinstance(s, int) else s
 
-#addr = 'ol-search-inside:8984'
+addr = 'ol-search-inside:8984'
 addr = 'localhost:6081'
 solr_select_url = 'http://' + addr + '/solr/select?wt=json' + \
     '&json.nl=arrarr' + \
@@ -271,6 +271,22 @@ def get_collection_titles(results):
         print ret
         raise
     return dict((c['identifier'], c['title']) for c in data['response']['docs'])
+
+@app.route('/mlt/<identifier>')
+def view_mlt(identifier):
+    url = 'http://' + addr + '/solr/mlt?wt=json' + \
+        '&json.nl=arrarr' + \
+        '&q=identifier:' + quote(identifier) + \
+        '&mlt.fl=creator,title,subject,collection,mediatype,description,case-name,sponsor' + \
+        '&mlt.mintf=1' + \
+        '&indent=on' + \
+        '&rows=20'
+    ret = urlopen(url).read()
+    try:
+        data = json.loads(ret)
+    except ValueError:
+        return ret
+    return render_template('mlt.html', identifier=identifier, mlt=data)
 
 @app.route("/")
 def do_search():

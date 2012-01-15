@@ -134,6 +134,7 @@ span.selected { background: #ccc; padding: 2px; }
         {% if doc.rating %}<b>Rating</b>: {{doc.rating }}{% endif %}
         {% if doc.imagecount %}<b>Images</b>: {{doc.imagecount }}{% endif %}
         {% if doc.foldoutcount %}<b>Foldouts</b>: {{doc.foldoutcount }}{% endif %}
+        (<a href="{{url_for('view_mlt', identifier=doc.identifier)}}">more like this</a>)
         <br>
         {% if doc.subject %}<b>Keywords</b>:
             {% if hl.subject %}
