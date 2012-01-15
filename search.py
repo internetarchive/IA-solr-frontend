@@ -46,21 +46,22 @@ solr_select_url = 'http://' + addr + '/solr/select?wt=json' + \
     '&json.nl=arrarr' + \
     '&defType=edismax' + \
     '&qf=text' + \
-    '&fl=identifier,creator,title,date,subject,collection,scanner,mediatype,description,noindex,score,case-name,rating,sponsor' + \
+    '&fl=identifier,creator,title,date,subject,collection,scanner,mediatype,description,noindex,score,case-name,rating,sponsor,imagecount,foldoutcount' + \
     '&spellcheck=true' + \
     '&spellcheck.onlyMorePopular=false' + \
     '&spellcheck.extendedResults=true' + \
-    '&spellcheck.count=1' + \
+    '&spellcheck.count=5' + \
     '&rows=' + str(results_per_page) + \
     '&facet=true&facet.limit=30&facet.mincount=1' + \
-    '&facet.range=date&facet.range.start=0000-01-01T00:00:00Z&facet.range.end=2015-01-01T00:00:00Z&facet.range.gap=%2B' + str(year_gap) + 'YEAR' + \
+    '&facet.range=date&f.date.facet.range.start=0000-01-01T00:00:00Z&f.date.facet.range.end=2015-01-01T00:00:00Z&f.date.facet.range.gap=%2B' + str(year_gap) + 'YEAR' + \
     '&hl=true&hl.fragsize=0&hl.fl=title,creator,subject,collection,description,case-name&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}') + \
-    '&bq=(*:* -collection:ourmedia -collection:opensource* collection:[* TO *])^10' + \
+    '&bq=(*:* -collection:ourmedia -collection:opensource* collection:*)^10' + \
     '&q.op=AND'
 #    '&debugQuery=true' + \
 #    '&spellcheck.collate=true' + \
 #    '&spellcheck.maxCollationTries=5' + \
 #    '&spellcheck.accuracy=0.5' + \
+#    '&facet.range=imagecount&f.imagecount.facet.range.start=0&f.imagecount.facet.range.end=1000000&f.imagecount.facet.range.gap=100' + \
 
 lang_map = {
     'eng': 'English',

@@ -36,13 +36,16 @@ span.selected { background: #ccc; padding: 2px; }
 {% endmacro %}
 
 {% if results %}
+{% if results.spellcheck %}
+<!-- spelling suggestions: 
+{{ results.spellcheck.suggestions | pprint | safe }} -->
+{% endif %}
+{% if results.response.numFound == 0 %}
+    <br>Your search - <b>{{ q }}</b> - did not match any documents.
+{% else %}
     <!-- {{url|safe}} -->
     {{ comma(results.response.numFound) }} results<br>
     solr time: {{ '%.4f' | format(t_solr) }} seconds<p>
-    {% if results.spellcheck %}
-<!-- spelling suggestions: 
-{{ results.spellcheck.suggestions | pprint | safe }} -->
-    {% endif %}
     <table>
     <tr><td valign="top">
     {% set mediatypes = ['texts', 'movies', 'audio', 'image', 'etree', 'software'] %}
@@ -125,9 +128,12 @@ span.selected { background: #ccc; padding: 2px; }
             <br>
         {% endif %}
         
-        {% if doc.date %}<b>Date</b>: {{doc.date[:10] }}<br>{% endif %}
-        {% if doc.rating %}<b>Rating</b>: {{doc.rating }}<br>{% endif %}
-        {% if doc.sponsor %}<b>Sponsor</b>: {{doc.sponsor }}<br>{% endif %}
+        {% if doc.date %}<b>Date</b>: {{doc.date[:10] }}{% endif %}
+        {% if doc.sponsor %}<b>Sponsor</b>: <a href="?{{changequery({'page':None,'sponsor':doc.sponsor})}}">{{doc.sponsor}}</a>{% endif %}
+        {% if doc.rating %}<b>Rating</b>: {{doc.rating }}{% endif %}
+        {% if doc.imagecount %}<b>Images</b>: {{doc.imagecount }}{% endif %}
+        {% if doc.foldoutcount %}<b>Foldouts</b>: {{doc.foldoutcount }}{% endif %}
+        <br>
         {% if doc.subject %}<b>Keywords</b>:
             {% if hl.subject %}
                 {% for s in hl.subject %}
@@ -179,6 +185,15 @@ span.selected { background: #ccc; padding: 2px; }
             {% endif %}
         {% endfor %}
 
+        {% if results.facet_counts.facet_ranges.get('imagecount', {}).counts %}
+            <h2>image count</h2>
+            {% for i in results.facet_counts.facet_ranges.imagecount.counts | reverse %}
+                {% set facet_min = int(i[0]) %}
+                {% set facet_max = facet_min + 100 %}
+                <a href="?{{changequery({'page':None,'imagecount':i[0]})}}">{{facet_min}}-{{facet_max}}</a> ({{ comma(i[1]) }})<br>
+            {% endfor %}
+        {% endif %}
+
     </td></tr></table>
 
     Pages:
@@ -199,6 +214,7 @@ span.selected { background: #ccc; padding: 2px; }
         <a href="?{{changequery({'page':pager.pages})}}">Last&nbsp;&raquo;</a>
     {% endif %}
 
+{% endif %}
 {% endif %}
 </body>
 </html>
