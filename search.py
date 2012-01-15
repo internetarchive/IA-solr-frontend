@@ -36,12 +36,13 @@ def find_item(ia):
 facet_fields = ['noindex', 'mediatype', 'collection', 'language_facet', 'subject_facet', 'publisher_facet']
 year_gap = 10
 
-results_per_page = 20 
+results_per_page = 30 
 
 def quote(s):
     return quote_plus(s.encode('utf-8'))
 
-solr_select_url = 'http://localhost:8983/solr/select?wt=json' + \
+addr = 'ol-search-inside:8984'
+solr_select_url = 'http://' + addr + '/solr/select?wt=json' + \
     '&json.nl=arrarr' + \
     '&defType=edismax' + \
     '&qf=text' + \
@@ -52,8 +53,19 @@ solr_select_url = 'http://localhost:8983/solr/select?wt=json' + \
     '&hl=true&hl.fl=title,creator,subject,collection,description&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}') + \
     '&bq=(*:* -collection:ourmedia -collection:opensource*)^10' + \
     '&q.op=AND'
+#    '&debugQuery=true' + \
 
-solr_spell_url = 'http://localhost:8983/solr/spell?wt=json&spellcheck=true&spellcheck.collate=true&spellcheck.extendedResults=true&spellcheck.maxCollations=3&spellcheck.maxCollationTries=3&rows=0&q='
+solr_spell_url = 'http://' + addr + '/solr/spell?wt=json&spellcheck=true&spellcheck.collate=true&spellcheck.extendedResults=true&spellcheck.maxCollations=3&spellcheck.maxCollationTries=3&rows=10&q='
+solr_spell_url = 'http://' + addr + '/solr/spell?wt=json' + \
+        '&json.nl=arrarr' + \
+        '&spellcheck=true' + \
+        '&spellcheck.maxCollationTries=5' + \
+        '&spellcheck.onlyMorePopular=false' + \
+        '&spellcheck.count=5' + \
+        '&spellcheck.collate=true' + \
+        '&spellcheck.extendedResults=true' + \
+        '&spellcheck.accuracy=0.1' + \
+        '&rows=10&q='
 
 lang_map = {
     'eng': 'English',
@@ -216,6 +228,9 @@ def do_search():
     elif date_facet:
         fq += '&fq=' + quote('date:[%s-01-01T00:00:00Z TO %s-01-01T00:00:00Z+%dYEAR]' % (date_facet, date_facet, year_gap))
 
+    #spell_results = json.load(urlopen(solr_spell_url + quote(q)))
+    spell_results = None
+
     url = solr_select_url + '&q=' + quote(q) + '&start=%d' % start + fq + ''.join('&facet.field='+('{!ex=' + f + '}' if f in facet_args_dict else '') + f for f in facet_fields)
     t0_solr = time()
     f = urlopen(url)
@@ -233,7 +248,7 @@ def do_search():
             quote=quote, comma=comma, int=int, facet_fields=facet_fields, lang_map=lang_map, facet_args=facet_args, \
             get_movie_thumb=get_movie_thumb, year_gap=year_gap, find_item=find_item, enumerate=enumerate, len=len, pick_best=pick_best, url=url, \
             facet_args_dict=facet_args_dict,\
-            get_img_thumb = get_img_thumb, changequery=changequery, token_hl=token_hl, t_solr=t_solr)
+            get_img_thumb = get_img_thumb, changequery=changequery, token_hl=token_hl, t_solr=t_solr, spell_results=spell_results)
     
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8081, debug=True)

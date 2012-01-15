@@ -1,6 +1,7 @@
 <html>
 <head>
-<title>Search</title>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<title>{% if q %}{{ q + ' - ' }}{% endif %}Internet Archive search</title>
 <style>
 body { font-family: serif; }
 em { background: yellow; font-style: normal; }
@@ -28,7 +29,6 @@ span.selected { background: #ccc; padding: 2px; }
     {% endif %}
 {% endmacro %}
 
-
 {% if results %}
     <!-- {{url|safe}} -->
     {{ comma(results.response.numFound) }} results<br>
@@ -48,13 +48,11 @@ span.selected { background: #ccc; padding: 2px; }
             {% endif %}
             <a href="{{ details }}">
             {% if hl.title %}
-                {% for t in hl.title %}
-                    {% for token_type, token in token_hl(t) %}
-                        {% if token_type == 'text' %}{{token}}{% else %}<em>{{ token }}</em>{% endif %}
-                    {% endfor %}
+                {% for token_type, token in token_hl(hl.title[0]) %}
+                    {% if token_type == 'text' %}{{token}}{% else %}<em>{{ token }}</em>{% endif %}
                 {% endfor %}
             {% else %}
-                {{ '; '.join(doc.title) }}
+                {{ doc.title or doc.identifier }}
             {% endif %}
             </a>
             {% if hl.creator %}
@@ -98,11 +96,17 @@ span.selected { background: #ccc; padding: 2px; }
         {% else %}
             <td>
         {% endif %}
-        {% for desc in hl.description %}
-            {% for token_type, token in token_hl(desc) %}
-                {% if token_type == 'text' %}{{token}}{% else %}<em>{{ token }}</em>{% endif %}
-            {% endfor %}<br>
-        {% endfor %}
+        {% if doc.description %}
+            {% if hl.description %}
+                {% for token_type, token in token_hl(hl.description[0]) %}
+                    {% if token_type == 'text' %}{{token}}{% else %}<em>{{ token }}</em>{% endif %}
+                {% endfor %}
+            {% else %}
+                {{ doc.description }}
+            {% endif %}
+            <br>
+        {% endif %}
+        
         {% if doc.date %}<b>Date</b>: {{doc.date[:10] }}<br>{% endif %}
         {% if doc.subject %}<b>Keywords</b>:
             {% if hl.subject %}
