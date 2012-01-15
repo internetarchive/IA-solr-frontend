@@ -48,9 +48,7 @@ solr_select_url = 'http://' + addr + '/solr/select?wt=json' + \
     '&qf=text' + \
     '&fl=identifier,creator,title,date,subject,collection,scanner,mediatype,description,noindex,score,case-name,rating,sponsor,imagecount,foldoutcount' + \
     '&spellcheck=true' + \
-    '&spellcheck.onlyMorePopular=false' + \
-    '&spellcheck.extendedResults=true' + \
-    '&spellcheck.count=5' + \
+    '&spellcheck.count=1' + \
     '&rows=' + str(results_per_page) + \
     '&facet=true&facet.limit=30&facet.mincount=1' + \
     '&facet.range=date&f.date.facet.range.start=0000-01-01T00:00:00Z&f.date.facet.range.end=2015-01-01T00:00:00Z&f.date.facet.range.gap=%2B' + str(year_gap) + 'YEAR' + \
@@ -128,6 +126,53 @@ def test_token_hl():
     assert l == [('text', 'aaa '), ('hl', 'bbb')]
     l = list(token_hl('aaa {{{bbb}}} ccc'))
     assert l == [('text', 'aaa '), ('hl', 'bbb'), ('text', ' ccc')]
+
+def parse_suggestions(q, suggestions):
+    reply = []
+    xpos = 0
+    for word, s in suggestions:
+        if s['startOffset'] > xpos:
+            reply.append(('orig', q[xpos:s['startOffset']]))
+        reply.append(('fix', s['suggestion'][0]))
+        xpos = s['endOffset']
+    if xpos != len(q):
+        reply.append(('orig', q[xpos:]))
+    return reply
+
+def test_parse_suggestions():
+    q = 'foodd'
+    suggestions = [[u'foodd',
+                   {u'endOffset': 5,
+                    u'numFound': 1,
+                    u'startOffset': 0,
+                    u'suggestion': [u'food']}]]
+    expect = [('fix', 'food')]
+    assert parse_suggestions(q, suggestions) == expect
+
+    q = 'unnitted stattes'
+    suggestions = [[u'unnitted',
+                   {u'endOffset': 8,
+                    u'numFound': 1,
+                    u'startOffset': 0,
+                    u'suggestion': [u'united']}]]
+
+    expect = [('fix', 'united'), ('orig', ' stattes')]
+    assert parse_suggestions(q, suggestions) == expect
+
+    q = 'unnitted stetes'
+    suggestions = [[u'unnitted',
+                   {u'endOffset': 8,
+                    u'numFound': 1,
+                    u'startOffset': 0,
+                    u'suggestion': [u'united']}],
+                  [u'stetes',
+                   {u'endOffset': 15,
+                    u'numFound': 1,
+                    u'startOffset': 9,
+                    u'suggestion': [u'states']}]]
+    expect = [('fix', 'united'), ('orig', ' '), ('fix', 'states')]
+    assert parse_suggestions(q, suggestions) == expect
+
 
 re_thumb_dir_link = re.compile('<a href="(.+\.thumbs/)">')
 re_link = re.compile('<a href="(.+)">')
@@ -260,6 +305,10 @@ def do_search():
 
     collection_titles = get_collection_titles(results)
 
+    did_you_mean = []
+    if results.get('spellcheck', {}).get('suggestions'):
+        did_you_mean = parse_suggestions(q, results['spellcheck']['suggestions'])
+
     pager = build_pager(results['response']['numFound'], page)
 
     return render_template('search.html', q=q, page=page, results=results, \
@@ -267,7 +316,8 @@ def do_search():
             quote=quote, comma=comma, int=int, facet_fields=facet_fields, lang_map=lang_map, facet_args=facet_args, \
             get_movie_thumb=get_movie_thumb, year_gap=year_gap, find_item=find_item, enumerate=enumerate, len=len, pick_best=pick_best, url=url, \
             facet_args_dict=facet_args_dict,\
-            get_img_thumb = get_img_thumb, changequery=changequery, token_hl=token_hl, t_solr=t_solr, collection_titles=collection_titles)
+            get_img_thumb = get_img_thumb, changequery=changequery, token_hl=token_hl, t_solr=t_solr, collection_titles=collection_titles, 
+            did_you_mean=did_you_mean)
     
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8081, debug=True)
