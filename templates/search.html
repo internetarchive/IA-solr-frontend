@@ -114,7 +114,7 @@ span.selected { background: #ccc; padding: 2px; }
                     <a href="?{{changequery({'page':None,'subject_facet':s.replace('{{{', '').replace('}}}','')})}}">
                     {% for token_type, token in token_hl(s) %}
                         {% if token_type == 'text' %}{{token}}{% else %}<em>{{ token }}</em>{% endif %}
-                    {% endfor %}</a>;
+                    {% endfor %}</a>{% if not loop.last %}; {% endif %}
                 {% endfor %}
             {% else %}
                 {% for s in doc.subject %}
@@ -125,7 +125,7 @@ span.selected { background: #ccc; padding: 2px; }
         {% endif %}
         {% if doc.collection %}<b>Collections</b>: 
             {% for collection in doc.collection %}
-                <a href="?{{changequery({'page':None,'collection':collection})}}">{{collection}}</a>;
+                <a href="?{{changequery({'page':None,'collection':collection})}}">{{collection}}</a>{% if not loop.last %}; {% endif %}
             {% endfor %}
             <br>
         {% endif %}

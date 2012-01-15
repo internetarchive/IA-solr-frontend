@@ -39,7 +39,7 @@ year_gap = 10
 results_per_page = 30 
 
 def quote(s):
-    return quote_plus(s.encode('utf-8'))
+    return quote_plus(s.encode('utf-8')) if not isinstance(s, int) else s
 
 addr = 'ol-search-inside:8984'
 solr_select_url = 'http://' + addr + '/solr/select?wt=json' + \
@@ -162,7 +162,7 @@ re_thumb_link = re.compile('<a href="(.+thumb.*)">')
 def changequery(new_args):
     args = dict((k, v) for k, v in request.args.items() if v and k not in new_args)
     args.update(dict((k, v) for k, v in new_args.items() if v is not None))
-    return '&'.join('%s=%s' % (k, v) for k, v in args.items())
+    return '&'.join('%s=%s' % (k, quote(v)) for k, v in args.items())
 
 def test_changequery():
     with app.test_client() as c:
