@@ -41,7 +41,8 @@ results_per_page = 30
 def quote(s):
     return quote_plus(s.encode('utf-8')) if not isinstance(s, int) else s
 
-addr = 'ol-search-inside:8984'
+#addr = 'ol-search-inside:8984'
+addr = 'localhost:6081'
 solr_select_url = 'http://' + addr + '/solr/select?wt=json' + \
     '&json.nl=arrarr' + \
     '&defType=edismax' + \

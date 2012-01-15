@@ -36,9 +36,10 @@ span.selected { background: #ccc; padding: 2px; }
 {% endmacro %}
 
 {% if results %}
-{% if results.spellcheck %}
-<!-- spelling suggestions: 
-{{ results.spellcheck.suggestions | pprint | safe }} -->
+    <br>
+{% if did_you_mean %}
+    Did you mean <a href="?q={%for i in did_you_mean%}{{quote(i[1])}}{%endfor%}">
+{%for token, text in did_you_mean%}{% if token=='fix' %}<span style="font-weight:bold">{{text}}</span>{% else %}{{text}}{%endif%}{%endfor%}</a>?<br>
 {% endif %}
 {% if results.response.numFound == 0 %}
     <br>Your search - <b>{{ q }}</b> - did not match any documents.
