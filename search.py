@@ -33,7 +33,7 @@ def find_item(ia):
             return (ia_host, ia_path)
     raise FindItemError
 
-facet_fields = ['noindex', 'mediatype', 'collection', 'language_facet', 'subject_facet', 'publisher_facet']
+facet_fields = ['noindex', 'mediatype', 'collection', 'language_facet', 'subject_facet', 'publisher_facet', 'rating', 'sponsor_facet', 'camera']
 year_gap = 10
 
 results_per_page = 30 
@@ -46,26 +46,21 @@ solr_select_url = 'http://' + addr + '/solr/select?wt=json' + \
     '&json.nl=arrarr' + \
     '&defType=edismax' + \
     '&qf=text' + \
-    '&fl=identifier,creator,title,date,subject,collection,scanner,mediatype,description,noindex,score' + \
+    '&fl=identifier,creator,title,date,subject,collection,scanner,mediatype,description,noindex,score,case-name,rating,sponsor' + \
+    '&spellcheck=true' + \
+    '&spellcheck.onlyMorePopular=false' + \
+    '&spellcheck.extendedResults=true' + \
+    '&spellcheck.count=1' + \
     '&rows=' + str(results_per_page) + \
-    '&facet=true&facet.limit=30&facet.mincount=2' + \
+    '&facet=true&facet.limit=30&facet.mincount=1' + \
     '&facet.range=date&facet.range.start=0000-01-01T00:00:00Z&facet.range.end=2015-01-01T00:00:00Z&facet.range.gap=%2B' + str(year_gap) + 'YEAR' + \
-    '&hl=true&hl.fl=title,creator,subject,collection,description&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}') + \
-    '&bq=(*:* -collection:ourmedia -collection:opensource*)^10' + \
+    '&hl=true&hl.fragsize=0&hl.fl=title,creator,subject,collection,description,case-name&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}') + \
+    '&bq=(*:* -collection:ourmedia -collection:opensource* collection:[* TO *])^10' + \
     '&q.op=AND'
 #    '&debugQuery=true' + \
-
-solr_spell_url = 'http://' + addr + '/solr/spell?wt=json&spellcheck=true&spellcheck.collate=true&spellcheck.extendedResults=true&spellcheck.maxCollations=3&spellcheck.maxCollationTries=3&rows=10&q='
-solr_spell_url = 'http://' + addr + '/solr/spell?wt=json' + \
-        '&json.nl=arrarr' + \
-        '&spellcheck=true' + \
-        '&spellcheck.maxCollationTries=5' + \
-        '&spellcheck.onlyMorePopular=false' + \
-        '&spellcheck.count=5' + \
-        '&spellcheck.collate=true' + \
-        '&spellcheck.extendedResults=true' + \
-        '&spellcheck.accuracy=0.1' + \
-        '&rows=10&q='
+#    '&spellcheck.collate=true' + \
+#    '&spellcheck.maxCollationTries=5' + \
+#    '&spellcheck.accuracy=0.5' + \
 
 lang_map = {
     'eng': 'English',
@@ -166,7 +161,7 @@ def changequery(new_args):
 
 def test_changequery():
     with app.test_client() as c:
-        rv = c.get('/?q=test&mediatype=movies&language=eng')
+        rv = c.get('/?mediatype=movies&language=eng')
         assert request.args['q'] == 'test'
         assert request.args['mediatype'] == 'movies'
         assert request.args['language'] == 'eng'
@@ -207,6 +202,29 @@ def build_pager(num_found, page, pages_in_set = 10):
         'page_list': range(first_page_in_set, last_page_in_set+1),
     }
 
+def get_collection_titles(results):
+    collections = set(key for key, num in results['facet_counts']['facet_fields']['collection'])
+    for doc in results['response']['docs']:
+        collections.update(doc['collection'])
+
+    if not collections:
+        return {}
+
+    url = 'http://' + addr + '/solr/select?wt=json' + \
+        '&json.nl=arrarr' + \
+        '&defType=edismax' + \
+        '&qf=identifier' + \
+        '&q=' + quote(' OR '.join(collections)) + \
+        '&fl=identifier,title' + \
+        '&rows=%d' % len(collections)
+    ret = urlopen(url).read()
+    try:
+        data = json.loads(ret)
+    except ValueError:
+        print ret
+        raise
+    return dict((c['identifier'], c['title']) for c in data['response']['docs'])
+
 @app.route("/")
 def do_search():
     q = request.args.get('q')
@@ -217,7 +235,8 @@ def do_search():
     quote_q = quote(q)
     page = int(request.args.get('page', 1))
     start = results_per_page * (page-1)
-    fq = ''.join('&fq=' + quote('{!tag=%s}{!term f=%s}%s' % (f, f, request.args[f])) for f in facet_fields if f in request.args)
+    #fq = ''.join('&fq=' + quote('{!tag=%s}{!term f=%s}%s' % (f, f, request.args[f])) for f in facet_fields if f in request.args)
+    fq = ''.join('&fq=' + quote('{!tag=%s}%s:"%s"' % (f, f, request.args[f])) for f in facet_fields if f in request.args)
     date_range = request.args.get('date_range')
     date_facet = request.args.get('date_facet')
     if date_range:
@@ -227,9 +246,6 @@ def do_search():
             fq += '&fq=' + quote('date:[%s-01-01T00:00:00Z TO %s-01-01T00:00:00Z]' % (start_year, end_year))
     elif date_facet:
         fq += '&fq=' + quote('date:[%s-01-01T00:00:00Z TO %s-01-01T00:00:00Z+%dYEAR]' % (date_facet, date_facet, year_gap))
-
-    #spell_results = json.load(urlopen(solr_spell_url + quote(q)))
-    spell_results = None
 
     url = solr_select_url + '&q=' + quote(q) + '&start=%d' % start + fq + ''.join('&facet.field='+('{!ex=' + f + '}' if f in facet_args_dict else '') + f for f in facet_fields)
     t0_solr = time()
@@ -241,6 +257,8 @@ def do_search():
     except ValueError:
         return reply
 
+    collection_titles = get_collection_titles(results)
+
     pager = build_pager(results['response']['numFound'], page)
 
     return render_template('search.html', q=q, page=page, results=results, \
@@ -248,7 +266,7 @@ def do_search():
             quote=quote, comma=comma, int=int, facet_fields=facet_fields, lang_map=lang_map, facet_args=facet_args, \
             get_movie_thumb=get_movie_thumb, year_gap=year_gap, find_item=find_item, enumerate=enumerate, len=len, pick_best=pick_best, url=url, \
             facet_args_dict=facet_args_dict,\
-            get_img_thumb = get_img_thumb, changequery=changequery, token_hl=token_hl, t_solr=t_solr, spell_results=spell_results)
+            get_img_thumb = get_img_thumb, changequery=changequery, token_hl=token_hl, t_solr=t_solr, collection_titles=collection_titles)
     
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8081, debug=True)

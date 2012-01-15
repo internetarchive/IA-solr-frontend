@@ -1,3 +1,4 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
@@ -19,7 +20,12 @@ span.selected { background: #ccc; padding: 2px; }
         {% set facet_heading = 'media type' if k == 'mediatype' else k.replace('_facet', '') %}
         <h2>{{ facet_heading }}</h2>
         {% for key, count in fc[k] %}
-            {% set label=lang_map.get(key.lower(), key) if k == 'language_facet' else key %}
+            {% set label = key %}
+            {% if k == 'collection' and key in collection_titles %}
+                {% set label = collection_titles[key] %}
+            {% elif k == 'language_facet' and key.lower() in lang_map %}
+                {% set label=lang_map[key.lower()] %}
+            {% endif %}
             {% if key in facet_args_dict[k] %}
                 <a href="?{{changequery({'page':None,k:None})}}">[x]</a> <b>{{ label |truncate(48) }}</b> ({{ comma(count) }}) <br>
             {% else %}
@@ -33,20 +39,26 @@ span.selected { background: #ccc; padding: 2px; }
     <!-- {{url|safe}} -->
     {{ comma(results.response.numFound) }} results<br>
     solr time: {{ '%.4f' | format(t_solr) }} seconds<p>
+    {% if results.spellcheck %}
+<!-- spelling suggestions: 
+{{ results.spellcheck.suggestions | pprint | safe }} -->
+    {% endif %}
     <table>
     <tr><td valign="top">
-    {% set mediatypes = ['texts', 'movies', 'audio', 'image', 'web', 'etree', 'software'] %}
+    {% set mediatypes = ['texts', 'movies', 'audio', 'image', 'etree', 'software'] %}
     <table>
     {% for doc in results.response.docs %}
         {% set details = "http://www.archive.org/details/" + doc.identifier %}
         {% set hl = results.highlighting[doc.identifier] %}
         <!-- {{ hl | pprint | safe }} -->
+        <!-- {{ doc | pprint | safe }} -->
         <tr>
             <td>
             {% if doc.mediatype in mediatypes %}
                 <img src="http://www.archive.org/images/mediatype_{{doc.mediatype|lower}}.gif">
             {% endif %}
             <a href="{{ details }}">
+            {% if 'case-name' in doc %}{{ doc['case-name'][0] }} - {%endif -%}
             {% if hl.title %}
                 {% for token_type, token in token_hl(hl.title[0]) %}
                     {% if token_type == 'text' %}{{token}}{% else %}<em>{{ token }}</em>{% endif %}
@@ -85,7 +97,7 @@ span.selected { background: #ccc; padding: 2px; }
         </tr>
         <tr>
         {% if doc.mediatype=='movies' %}
-            <td colspan="2">
+            <td colspan="2" valign="top">
             {% set thumb = get_movie_thumb(doc.identifier) %}
             {% if thumb %}
                 {% for img in pick_best(thumb.imgs, num=4) %}
@@ -94,20 +106,28 @@ span.selected { background: #ccc; padding: 2px; }
                 <br>
             {% endif %}
         {% else %}
-            <td>
+            <td valign="top">
         {% endif %}
         {% if doc.description %}
             {% if hl.description %}
-                {% for token_type, token in token_hl(hl.description[0]) %}
-                    {% if token_type == 'text' %}{{token}}{% else %}<em>{{ token }}</em>{% endif %}
+                {% for token_type, token in token_hl(hl.description[0].replace('<br />','\n')) %}
+                    {% if token_type == 'text' %}
+                        {% for line in token.splitlines() %}
+                            {{ line }}{% if not loop.last %}<br>{% endif %}
+                        {% endfor %}
+                    {% else %}<em>{{ token }}</em>{% endif %}
                 {% endfor %}
             {% else %}
-                {{ doc.description }}
+                {% for line in doc.description.replace('<br />','\n').splitlines() %}
+                    {{ line }}{% if not loop.last %}<br>{% endif %}
+                {% endfor %}
             {% endif %}
             <br>
         {% endif %}
         
         {% if doc.date %}<b>Date</b>: {{doc.date[:10] }}<br>{% endif %}
+        {% if doc.rating %}<b>Rating</b>: {{doc.rating }}<br>{% endif %}
+        {% if doc.sponsor %}<b>Sponsor</b>: {{doc.sponsor }}<br>{% endif %}
         {% if doc.subject %}<b>Keywords</b>:
             {% if hl.subject %}
                 {% for s in hl.subject %}
@@ -118,14 +138,14 @@ span.selected { background: #ccc; padding: 2px; }
                 {% endfor %}
             {% else %}
                 {% for s in doc.subject %}
-                    <a href="?{{changequery({'page':None,'subject_facet':s})}}">{{s}}</a>;
+                    <a href="?{{changequery({'page':None,'subject_facet':s})}}">{{s}}</a>{% if not loop.last %}; {% endif %}
                 {% endfor %}
             {% endif %}
             <br>
         {% endif %}
         {% if doc.collection %}<b>Collections</b>: 
-            {% for collection in doc.collection %}
-                <a href="?{{changequery({'page':None,'collection':collection})}}">{{collection}}</a>{% if not loop.last %}; {% endif %}
+            {% for c in doc.collection %}
+                <a href="?{{changequery({'page':None,'collection':c})}}">{{collection_titles.get(c, c) }}</a>{% if not loop.last %}; {% endif %}
             {% endfor %}
             <br>
         {% endif %}
@@ -143,13 +163,15 @@ span.selected { background: #ccc; padding: 2px; }
             {{ facet_list(fc, k) }}
         {% endfor %}
 
-        <h2>decade</h2>
-        {% for i in results.facet_counts.facet_ranges.date.counts | reverse %}
-            {% set start_year = int(i[0][:4]) %}
-            {% set end_year = 'now' if loop.first else start_year + year_gap %}
-            {% set end_year = start_year + year_gap %}
-            <a href="?{{changequery({'page':None,'date_facet':i[0][:4]})}}">{{start_year}}-{{end_year}}</a> ({{ comma(i[1]) }})<br>
-        {% endfor %}
+        {% if results.facet_counts.facet_ranges.date.counts %}
+            <h2>decade</h2>
+            {% for i in results.facet_counts.facet_ranges.date.counts | reverse %}
+                {% set start_year = int(i[0][:4]) %}
+                {% set end_year = 'now' if loop.first else start_year + year_gap %}
+                {% set end_year = start_year + year_gap %}
+                <a href="?{{changequery({'page':None,'date_facet':i[0][:4]})}}">{{start_year}}-{{end_year}}</a> ({{ comma(i[1]) }})<br>
+            {% endfor %}
+        {% endif %}
 
         {% for k in facet_fields %}
             {% if k not in ('noindex', 'mediatype') %}
