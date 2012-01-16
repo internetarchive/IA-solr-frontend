@@ -14,73 +14,22 @@
 
 <table>
 {% for doc in mlt.response.docs %}
-{% set details = "http://www.archive.org/details/" + doc.identifier %}
-    <tr>
-        <td>
-        {% if doc.mediatype in mediatypes %}
-            <img src="http://www.archive.org/images/mediatype_{{doc.mediatype|lower}}.gif">
-        {% endif %}
-        <a href="{{ details }}">{% if 'case-name' in doc %}{{ doc['case-name'][0] }} - {%endif -%}{{ doc.title }}</a> {{ ', '.join(doc.creator) }}
-
-        {% if doc.noindex %}<span style="padding:2px;background:red;color:white">noindex</span>{% endif %}
-
-        {% if doc.mediatype=='movies' %}
-            <td></td>
-        {% else %}
-            <td valign="top" rowspan="2" align="right">
-                {% if doc.mediatype == 'texts' and doc.scanner %}
-                    <a href="{{details}}"><img src="http://www.archive.org/download/{{ doc.identifier }}/page/{{doc.identifier}}_cover_h100.jpg" height="150"></a>
-                {% elif doc.mediatype == 'image' %}
-                    {% set thumb_url = get_img_thumb(doc.identifier) %}
-                    {% if thumb_url %}
-                        <a href="{{details}}"><img src="{{thumb_url}}"></a>
-                    {% endif %}
-                {% endif %}
-            </td>
-        {% endif %}
-    </tr>
-    <tr>
-    {% if doc.mediatype=='movies' %}
-        <td colspan="2" valign="top">
-        {% set thumb = get_movie_thumb(doc.identifier) %}
-        {% if thumb %}
-            {% for img in pick_best(thumb.imgs, num=4) %}
-                <a href="{{details}}"><img src="{{thumb.url + img }}"></a>
-            {% endfor %}
-            <br>
-        {% endif %}
-    {% else %}
-        <td valign="top">
+    {% set details = "http://www.archive.org/details/" + doc.identifier %}
+    <tr><td>
+    {% if doc.mediatype in mediatypes %}
+        <img src="http://www.archive.org/images/mediatype_{{doc.mediatype|lower}}.gif">
     {% endif %}
-    {% if doc.description %}
-        {% for line in doc.description.replace('<br />','\n').splitlines() %}
-            {{ line }}{% if not loop.last %}<br>{% endif %}
-        {% endfor %}
-        <br>
-    {% endif %}
-    
-    {% if doc.date %}<b>Date</b>: {{doc.date[:10] }}{% endif %}
-    {% if doc.sponsor %}<b>Sponsor</b>: {{doc.sponsor}}{% endif %}
-    {% if doc.rating %}<b>Rating</b>: {{doc.rating }}{% endif %}
-    {% if doc.imagecount %}<b>Images</b>: {{doc.imagecount }}{% endif %}
-    {% if doc.foldoutcount %}<b>Foldouts</b>: {{doc.foldoutcount }}{% endif %}
-    (<a href="{{url_for('view_mlt', identifier=doc.identifier)}}">more like this</a>)
-    <br>
-    {% if doc.subject %}<b>Keywords</b>:
-        {% for s in doc.subject %}
-            {{s}}{% if not loop.last %}; {% endif %}
-        {% endfor %}
-        <br>
-    {% endif %}
+    <a href="{{ details }}">{% if 'case-name' in doc %}{{ doc['case-name'][0] }} - {%endif -%}{{ doc.title }}</a> {{ ', '.join(doc.creator) }}
+    </td>
+    <td>
+    {% if doc.noindex %}<span style="padding:2px;background:red;color:white">noindex</span>{% endif %}
     {% if doc.collection %}<b>Collections</b>: 
         {% for c in doc.collection %}
             <a href="http://www.archive.org/details/{{c}}">{{collection_titles.get(c, c) }}</a>{% if not loop.last %}; {% endif %}
         {% endfor %}
-        <br>
     {% endif %}
-    <br>
-
     </td>
+    <td>(<a href="{{url_for('view_mlt', identifier=doc.identifier)}}">more like this</a>)</td>
     </tr>
 {% endfor %}
 </table>
