@@ -76,13 +76,12 @@ span.selected { background: #ccc; padding: 2px; }
             <a href="{{ details }}">
             {% if 'case-name' in doc %}{{ doc['case-name'][0] }} - {%endif -%}
             {% if hl.title %}
-                {% for token_type, token in token_hl(hl.title[0]) %}
-                    {% if token_type == 'text' %}{{token}}{% else %}<em>{{ token }}</em>{% endif %}
-                {% endfor %}
-            {% else %}
+                {% for token_type, token in token_hl(hl.title[0]) -%}
+                    {% if token_type == 'text' %}{{token}}{% else %}<em>{{ token }}</em>{% endif -%}
+                {% endfor -%}
+            {%- else -%}
                 {{ doc.title or doc.identifier }}
-            {% endif %}
-            </a>
+            {%- endif -%}</a>
             {% if hl.creator %}
                 {% for creator in hl.creator %}
                     {% for token_type, token in token_hl(creator) %}
@@ -128,7 +127,7 @@ span.selected { background: #ccc; padding: 2px; }
             {% if hl.description %}
                 {% for token_type, token in token_hl(hl.description[0].replace('<br />','\n')) %}
                     {% if token_type == 'text' %}
-                        {% for line in token.splitlines() %}
+                        {% for line in token.splitlines() if line %}
                             {{ line }}{% if not loop.last %}<br>{% endif %}
                         {% endfor %}
                     {% else %}<em>{{ token }}</em>{% endif %}
@@ -193,10 +192,8 @@ span.selected { background: #ccc; padding: 2px; }
             {% endfor %}
         {% endif %}
 
-        {% for k in facet_fields %}
-            {% if k not in ('noindex', 'mediatype') %}
-                {{ facet_list(fc, k) }}
-            {% endif %}
+        {% for k in facet_fields if k not in ('noindex', 'mediatype') %}
+            {{ facet_list(fc, k) }}
         {% endfor %}
 
         {% if results.facet_counts.facet_ranges.get('imagecount', {}).counts %}

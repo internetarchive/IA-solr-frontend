@@ -254,7 +254,7 @@ def get_collection_titles(results):
     if 'facet_counts' in results:
         collections = set(key for key, num in results['facet_counts']['facet_fields']['collection'])
     for doc in results['response']['docs']:
-        collections.update(doc['collection'])
+        collections.update(doc.get('collection', []))
 
     if not collections:
         return {}
