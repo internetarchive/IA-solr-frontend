@@ -250,7 +250,9 @@ def build_pager(num_found, page, pages_in_set = 10):
     }
 
 def get_collection_titles(results):
-    collections = set(key for key, num in results['facet_counts']['facet_fields']['collection'])
+    collections = set()
+    if 'facet_counts' in results:
+        collections = set(key for key, num in results['facet_counts']['facet_fields']['collection'])
     for doc in results['response']['docs']:
         collections.update(doc['collection'])
 
@@ -286,7 +288,8 @@ def view_mlt(identifier):
         data = json.loads(ret)
     except ValueError:
         return ret
-    return render_template('mlt.html', identifier=identifier, mlt=data)
+    collection_titles = get_collection_titles(data)
+    return render_template('mlt.html', identifier=identifier, mlt=data, get_movie_thumb=get_movie_thumb, pick_best=pick_best, collection_titles=collection_titles)
 
 @app.route("/")
 def do_search():
