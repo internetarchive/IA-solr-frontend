@@ -337,7 +337,7 @@ def do_search():
             get_movie_thumb=get_movie_thumb, year_gap=year_gap, find_item=find_item, enumerate=enumerate, len=len, pick_best=pick_best, url=url, \
             facet_args_dict=facet_args_dict,\
             get_img_thumb = get_img_thumb, changequery=changequery, token_hl=token_hl, t_solr=t_solr, collection_titles=collection_titles, 
-            did_you_mean=did_you_mean)
+            did_you_mean=did_you_mean,date_facet=(int(date_facet) if date_facet is not None else None))
     
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8081, debug=True)

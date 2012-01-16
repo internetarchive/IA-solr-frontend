@@ -41,6 +41,18 @@ span.selected { background: #ccc; padding: 2px; }
     Did you mean <a href="?q={%for i in did_you_mean%}{{quote(i[1])}}{%endfor%}">
 {%for token, text in did_you_mean%}{% if token=='fix' %}<span style="font-weight:bold">{{text}}</span>{% else %}{{text}}{%endif%}{%endfor%}</a>?<br>
 {% endif %}
+
+{% if facet_args or date_facet %}
+    {% for k, v in facet_args %}
+    <a href="?{{changequery({'page':None,k:None})}}">[x]</a> <b>{{ k }}: {{ v |truncate(48) }}</b>
+    {% endfor %}
+    {% if date_facet %}
+    <a href="?{{changequery({'page':None,'date_facet':date_facet})}}">[x]</a> <b>decade: {{date_facet}}-{{date_facet+10}}</b>
+    {% endif %}
+    
+    <p>
+{% endif %}
+
 {% if results.response.numFound == 0 %}
     <br>Your search - <b>{{ q }}</b> - did not match any documents.
 {% else %}
