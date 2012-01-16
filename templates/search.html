@@ -8,6 +8,12 @@ body { font-family: serif; }
 em { background: yellow; font-style: normal; }
 span.selected { background: #ccc; padding: 2px; }
 </style>
+<script language="javascript" type="text/javascript" src="/javascript/jquery/jquery.js"></script>
+
+<!--[if IE]><script language="javascript" type="text/javascript" src="/javascript/excanvas/excanvas.js"></script><![endif]-->
+
+<script language="javascript" type="text/javascript" src="/javascript/flot/jquery.flot.js"></script>
+
 </head>
 <body>
 <h1>Search</h1>
@@ -59,6 +65,35 @@ span.selected { background: #ccc; padding: 2px; }
     <!-- {{url|safe}} -->
     {{ comma(results.response.numFound) }} results<br>
     solr time: {{ '%.4f' | format(t_solr) }} seconds<p>
+
+    {% if results.facet_counts.facet_ranges.date.counts %}
+        <div id="placeholder" style="width:1000px;height:450px"></div>
+
+        <script>
+
+        $(function() {
+            var years = [
+            {%- for y, count in results.facet_counts.facet_ranges.date.counts -%} 
+                [{{ y[:4] }}, {{ count }}]{% if not loop.last %},{% endif %}
+            {%- endfor %} ];
+
+            var options = { };
+
+            var series = {
+                data: years,
+                bars: { 
+                    show: true, 
+                    fill: 0.6, 
+                    align: "center"
+                },
+            };
+
+            $.plot($("#placeholder"), [series], options);
+        })
+        </script>
+
+    {% endif %}
+
     <table>
     <tr><td valign="top">
     {% set mediatypes = ['texts', 'movies', 'audio', 'image', 'etree', 'software'] %}

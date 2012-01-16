@@ -33,8 +33,8 @@ def find_item(ia):
             return (ia_host, ia_path)
     raise FindItemError
 
-facet_fields = ['noindex', 'mediatype', 'collection', 'language_facet', 'subject_facet', 'publisher_facet', 'rating', 'sponsor_facet', 'camera', 'handwritten']
-year_gap = 10
+facet_fields = ['noindex', 'mediatype', 'collection', 'language_facet', 'subject_facet', 'publisher_facet', 'licenseurl', 'possible-copyright-status', 'rating', 'sponsor_facet', 'camera', 'handwritten']
+year_gap = 1
 
 results_per_page = 30 
 
@@ -72,6 +72,59 @@ lang_map = {
     'rus': 'Russian',
     'dut': 'Dutch',
     'ara': 'Arabic',
+    'swe': 'Swedish',
+    'por': 'Portuguese',
+    'dan': 'Danish',
+    'hun': 'Hungarian',
+    'cze': 'Czech',
+    'tel': 'Telugu',
+    'pol': 'Polish',
+    'urd': 'Urdu',
+    'nor': 'Norwegian',
+    'rum': 'Romanian',
+    'ice': 'Icelandic',
+    'hrv': 'Croatian',
+    'arm': 'Armenian',
+    'srp': 'Serbian',
+    'swa': 'Swahili',
+    'ind': 'Indonesian',
+    'may': 'Malay',
+    'slv': 'Slovenian',
+    'tur': 'Turkish',
+    'fin': 'Finnish',
+    'wel': 'Welsh',
+    'bul': 'Bulgarian',
+    'afr': 'Afrikaans',
+    'slo': 'Slovak',
+    'cat': 'Catalan',
+    'san': 'Sanskrit',
+    'rum': 'Romanian',
+    'hin': 'Hindi',
+    'chi': 'Chinese',
+    'vie': 'Vietnamese',
+    'glg': 'Galician',
+    'tam': 'Tamil',
+    'jpn': 'Japanese',
+    'tgl': 'Tagalog',
+    'baq': 'Basque',
+    'heb': 'Hebrew',
+    'gle': 'Irish',
+    'kan': 'Kannada',
+    'ger': 'Deutsch',
+    'bos': 'Bosnian',
+    'ukr': 'Ukrainian',
+    'fre': 'Francais',
+    'ita': 'Italiano',
+    'mlt': 'Maltese',
+    'est': 'Estonian',
+    'aze': 'Azerbaijani',
+    'lit': 'Lithuanian',
+    'por': 'Portuguese',
+    'alb': 'Albanian',
+    'tha': 'Thai',
+    'gre': 'Greek',
+    'grc': 'Ancient Greek', 
+    'gae': 'Scottish Gaelic',
 }
 
 def test_quote():
