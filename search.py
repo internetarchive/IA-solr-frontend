@@ -12,6 +12,10 @@ re_loc = re.compile('^(ia\d+\.us\.archive\.org):(/\d+/items/(.*))$')
 class FindItemError(Exception):
     pass
 
+class SolrError(Exception):
+    def __init__(self, value):
+        self.value = value
+
 def find_item(ia):
     s = socket(AF_INET, SOCK_DGRAM, SOL_UDP)
     s.setblocking(1)
@@ -33,10 +37,10 @@ def find_item(ia):
             return (ia_host, ia_path)
     raise FindItemError
 
-facet_fields = ['noindex', 'mediatype', 'collection', 'language_facet', 'subject_facet', 'publisher_facet', 'licenseurl', 'possible-copyright-status', 'rating_facet', 'sponsor_facet', 'camera', 'handwritten']
+facet_fields = ['noindex', 'mediatype', 'collection', 'language_facet', 'creator_facet', 'subject_facet', 'publisher_facet', 'licenseurl', 'possible-copyright-status', 'rating_facet', 'sponsor_facet', 'camera', 'handwritten']
 year_gap = 10
 
-results_per_page = 30 
+results_per_page = 50 
 
 def quote(s):
     return quote_plus(s.encode('utf-8')) if not isinstance(s, int) else s
@@ -47,13 +51,12 @@ solr_select_url = 'http://' + addr + '/solr/select?wt=json' + \
     '&json.nl=arrarr' + \
     '&defType=edismax' + \
     '&qf=text' + \
-    '&fl=identifier,creator,title,date,subject,collection,scanner,mediatype,description,noindex,score,case-name,rating,sponsor,imagecount,foldoutcount' + \
+    '&fl=identifier,creator,title,date,subject,collection,scanner,mediatype,description,noindex,score,case-name,rating,sponsor,imagecount,foldoutcount,downloads,date_str' + \
     '&spellcheck=true' + \
     '&spellcheck.count=1' + \
     '&rows=' + str(results_per_page) + \
     '&facet=true&facet.limit=30&facet.mincount=1' + \
     '&facet.range=date&f.date.facet.range.start=0000-01-01T00:00:00Z&f.date.facet.range.end=2015-01-01T00:00:00Z&f.date.facet.range.gap=%2B' + str(year_gap) + 'YEAR' + \
-    '&facet.range=downloads&f.downloads.facet.range.start=0&f.downloads.facet.range.end=1000000&f.downloads.facet.range.gap=1000' + \
     '&hl=true&hl.snippets=1&hl.fragsize=0&hl.fl=title,creator,subject,collection,description,case-name&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}') + \
     '&f.description.hl.fragsize=200' + \
     '&bq=(*:* -collection:ourmedia -collection:opensource* collection:*)^10' + \
@@ -63,6 +66,7 @@ solr_select_url = 'http://' + addr + '/solr/select?wt=json' + \
 #    '&spellcheck.maxCollationTries=5' + \
 #    '&spellcheck.accuracy=0.5' + \
 #    '&facet.range=imagecount&f.imagecount.facet.range.start=0&f.imagecount.facet.range.end=1000000&f.imagecount.facet.range.gap=100' + \
+#    '&facet.range=downloads&f.downloads.facet.range.start=0&f.downloads.facet.range.end=1000000&f.downloads.facet.range.gap=100,10000' + \
 
 lang_map = {
     'eng': 'English',
@@ -127,6 +131,9 @@ lang_map = {
     'gre': 'Greek',
     'grc': 'Ancient Greek', 
     'gae': 'Scottish Gaelic',
+    'mul': 'Multiple',
+    'und': 'Undefined',
+    'english-handwritten': 'English (handwritten)',
 }
 
 def test_quote():
@@ -161,6 +168,23 @@ def test_pick_best():
     assert pick_best(range(7)) == [1,2,3,4]
     assert pick_best(range(8)) == [3, 4, 5, 6]
     assert pick_best(range(9)) == [3, 4, 5, 6]
+
+def fmt_licenseurl(url):
+    cc_start = 'http://creativecommons.org/licenses/'
+    if url.startswith('http://creativecommons.org/publicdomain/zero/1.0'):
+        return 'CC0 1.0'
+    if url.startswith('http://creativecommons.org/') and 'publicdomain' in url.lower():
+        return 'Public domain'
+    if url.startswith(cc_start):
+        return 'CC ' + url[len(cc_start):].upper().replace('/', ' ').strip()
+    return url
+
+def test_fmt_licenseurl():
+    url = 'http://creativecommons.org/licenses/by-nc-nd/3.0/us/'
+    label = 'Creative Commons BY-NC-ND 3.0 US'
+    assert fmt_licenseurl(url) == label
+    assert fmt_licenseurl('x') == 'x'
+
 
 def token_hl(s):
     while '{{{' in s:
@@ -321,12 +345,11 @@ def get_collection_titles(results):
         '&q=' + quote(' OR '.join(collections)) + \
         '&fl=identifier,title' + \
         '&rows=%d' % len(collections)
-    ret = urlopen(url).read()
+    reply = urlopen(url).read()
     try:
-        data = json.loads(ret)
+        data = json.loads(reply)
     except ValueError:
-        print ret
-        raise
+        raise SolrError(reply)
     return dict((c['identifier'], c['title']) for c in data['response']['docs'])
 
 @app.route('/mlt/<identifier>')
@@ -346,18 +369,35 @@ def view_mlt(identifier):
     collection_titles = get_collection_titles(data)
     return render_template('mlt.html', identifier=identifier, mlt=data, get_movie_thumb=get_movie_thumb, pick_best=pick_best, collection_titles=collection_titles)
 
+def search(q, url_params):
+    url = solr_select_url + '&q=' + quote(q) + url_params
+    t0_solr = time()
+    f = urlopen(url)
+    reply = f.read()
+    t_solr = time() - t0_solr
+    try:
+        results = json.loads(reply)
+    except ValueError:
+        raise SolrError(reply)
+    return {'url': url, 'results': results, 't_solr': t_solr}
+
+
+re_to_esc = re.compile(r'[\[\]:]')
+def esc(s):
+    return re_to_esc.sub(lambda m:'\\' + m.group(), s)
+
 @app.route("/")
 def do_search():
     q = request.args.get('q')
     if not q:
         return render_template('search.html')
+
     facet_args = [(f, request.args[f]) for f in facet_fields if f in request.args]
     facet_args_dict = dict(facet_args)
-    quote_q = quote(q)
     page = int(request.args.get('page', 1))
     start = results_per_page * (page-1)
     #fq = ''.join('&fq=' + quote('{!tag=%s}{!term f=%s}%s' % (f, f, request.args[f])) for f in facet_fields if f in request.args)
-    fq = ''.join('&fq=' + quote('{!tag=%s}%s:"%s"' % (f, f, request.args[f])) for f in facet_fields if f in request.args)
+    fq = ''.join('&fq=' + quote('{!tag=%s}%s:"%s"' % (f, f, esc(request.args[f]))) for f in facet_fields if f in request.args)
     date_range = request.args.get('date_range')
     date_facet = request.args.get('date_facet')
     if date_range:
@@ -368,31 +408,48 @@ def do_search():
     elif date_facet:
         fq += '&fq=' + quote('date:([%s-01-01T00:00:00Z TO %s-01-01T00:00:00Z+%dYEAR] NOT "%s-01-01T00:00:00Z+%dYEAR")' % (date_facet, date_facet, year_gap, date_facet, year_gap))
 
-    url = solr_select_url + '&q=' + quote(q) + '&start=%d' % start + fq + ''.join('&facet.field='+('{!ex=' + f + '}' if f in facet_args_dict else '') + f for f in facet_fields)
-    t0_solr = time()
-    f = urlopen(url)
-    reply = f.read()
-    t_solr = time() - t0_solr
+    url_facet_fields = ''.join('&facet.field='+('{!ex=' + f + '}' if f in facet_args_dict else '') + f for f in facet_fields)
+
+    url_params = '&start=%d' % start + fq + url_facet_fields
     try:
-        results = json.loads(reply)
-    except ValueError:
-        return reply
+        search_results = search(q, url_params)
+    except SolrError as solr_error:
+        return solr_error.value
+    results = search_results['results']
+    t_solr = search_results['t_solr']
 
-    collection_titles = get_collection_titles(results)
-
+    alt_results = False
     did_you_mean = []
     if results.get('spellcheck', {}).get('suggestions'):
         did_you_mean = parse_suggestions(q, results['spellcheck']['suggestions'])
+    if results['response']['numFound'] == 0 and did_you_mean and 'nfpr' not in request.args:
+        new_q = ''.join(i[1] for i in did_you_mean)
+        try:
+            search_results = search(new_q, url_params)
+        except SolrError as solr_error:
+            return solr_error.value
+        alt_results = True
+
+    collection_titles = get_collection_titles(results)
 
     pager = build_pager(results['response']['numFound'], page)
 
-    return render_template('search.html', q=q, page=page, results=results, \
-            results_per_page=results_per_page, pager=pager, \
-            quote=quote, comma=comma, int=int, facet_fields=facet_fields, lang_map=lang_map, facet_args=facet_args, \
-            get_movie_thumb=get_movie_thumb, year_gap=year_gap, find_item=find_item, enumerate=enumerate, len=len, pick_best=pick_best, url=url, \
-            facet_args_dict=facet_args_dict,\
-            get_img_thumb = get_img_thumb, changequery=changequery, token_hl=token_hl, t_solr=t_solr, collection_titles=collection_titles, 
-            did_you_mean=did_you_mean,date_facet=(int(date_facet) if date_facet is not None else None))
+    url = search_results['url']
+    results = search_results['results']
+    t_solr += search_results['t_solr']
+
+    return render_template('search.html', q=q, page=page, 
+        results=results, results_per_page=results_per_page, pager=pager,
+        quote=quote, comma=comma, int=int, facet_fields=facet_fields, 
+        lang_map=lang_map, facet_args=facet_args,
+        get_movie_thumb=get_movie_thumb, year_gap=year_gap,
+        find_item=find_item, enumerate=enumerate, len=len,
+        pick_best=pick_best, url=url, facet_args_dict=facet_args_dict,
+        get_img_thumb = get_img_thumb, changequery=changequery,
+        token_hl=token_hl, t_solr=t_solr, collection_titles=collection_titles,
+        did_you_mean=did_you_mean, alt_results=alt_results,
+        fmt_licenseurl=fmt_licenseurl,
+        date_facet=(int(date_facet) if date_facet is not None else None))
     
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8081, debug=True)
