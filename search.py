@@ -33,8 +33,8 @@ def find_item(ia):
             return (ia_host, ia_path)
     raise FindItemError
 
-facet_fields = ['noindex', 'mediatype', 'collection', 'language_facet', 'subject_facet', 'publisher_facet', 'licenseurl', 'possible-copyright-status', 'rating', 'sponsor_facet', 'camera', 'handwritten']
-year_gap = 1
+facet_fields = ['noindex', 'mediatype', 'collection', 'language_facet', 'subject_facet', 'publisher_facet', 'licenseurl', 'possible-copyright-status', 'rating_facet', 'sponsor_facet', 'camera', 'handwritten']
+year_gap = 10
 
 results_per_page = 30 
 
@@ -53,7 +53,9 @@ solr_select_url = 'http://' + addr + '/solr/select?wt=json' + \
     '&rows=' + str(results_per_page) + \
     '&facet=true&facet.limit=30&facet.mincount=1' + \
     '&facet.range=date&f.date.facet.range.start=0000-01-01T00:00:00Z&f.date.facet.range.end=2015-01-01T00:00:00Z&f.date.facet.range.gap=%2B' + str(year_gap) + 'YEAR' + \
-    '&hl=true&hl.fragsize=0&hl.fl=title,creator,subject,collection,description,case-name&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}') + \
+    '&facet.range=downloads&f.downloads.facet.range.start=0&f.downloads.facet.range.end=1000000&f.downloads.facet.range.gap=1000' + \
+    '&hl=true&hl.snippets=1&hl.fragsize=0&hl.fl=title,creator,subject,collection,description,case-name&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}') + \
+    '&f.description.hl.fragsize=200' + \
     '&bq=(*:* -collection:ourmedia -collection:opensource* collection:*)^10' + \
     '&q.op=AND'
 #    '&debugQuery=true' + \

@@ -66,7 +66,8 @@ span.selected { background: #ccc; padding: 2px; }
     {{ comma(results.response.numFound) }} results<br>
     solr time: {{ '%.4f' | format(t_solr) }} seconds<p>
 
-    {% if results.facet_counts.facet_ranges.date.counts %}
+    {% set show_year_chart = False %}
+    {% if show_year_chart and results.facet_counts.facet_ranges.date.counts %}
         <div id="placeholder" style="width:1000px;height:450px"></div>
 
         <script>
@@ -160,15 +161,19 @@ span.selected { background: #ccc; padding: 2px; }
         {% endif %}
         {% if doc.description %}
             {% if hl.description %}
-                {% for token_type, token in token_hl(hl.description[0].replace('<br />','\n')) %}
+                {% set hl_desc = hl.description[0] %}
+                {% set hl_desc2 = hl_desc.replace('{{{', '').replace('}}}', '') %}
+                {% if hl_desc2[:20] != doc.description[:20] %}&hellip;{% endif %}
+                {% for token_type, token in token_hl(hl_desc) %}
                     {% if token_type == 'text' %}
                         {% for line in token.splitlines() if line %}
                             {{ line }}{% if not loop.last %}<br>{% endif %}
                         {% endfor %}
                     {% else %}<em>{{ token }}</em>{% endif %}
                 {% endfor %}
+                {% if hl_desc2[-20:] != doc.description[-20:] %}&hellip;{% endif %}
             {% else %}
-                {% for line in doc.description.replace('<br />','\n').splitlines() %}
+                {% for line in doc.description.splitlines() if line %}
                     {{ line }}{% if not loop.last %}<br>{% endif %}
                 {% endfor %}
             {% endif %}
