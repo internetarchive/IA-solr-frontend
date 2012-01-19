@@ -1,0 +1,70 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<title>{% if q %}{{ q + ' - ' }}{% endif %}Internet Archive search</title>
+<style>
+body { font-family: serif; }
+em { background: yellow; font-style: normal; }
+span.selected { background: #ccc; padding: 2px; }
+
+table.dbq {
+  margin: 0px 32px 0px 0px;
+  border: 1px solid silver;
+  border-collapse: collapse;
+  border-top: 1px solid cornflowerblue;
+  font: 8pt sans-serif;
+}
+
+th.dbq { 
+  margin:0;
+  padding: 0px;
+  border: 1px solid #696969;
+  background: #e5e5e5;
+  text-align: center;
+}
+
+td.dbq  { 
+  margin: 0;
+  padding: 0px 2px;
+  border: 1px solid silver; 
+}
+
+td.dbqf { 
+  margin: 0;
+  padding: 2px 4px;
+  border: 1px solid silver;
+}
+
+tr.dbq:hover { 
+  background: khaki; 
+}
+
+.dbq a { text-decoration: none; }
+.dbq a:hover{ text-decoration: underline; }
+
+</style>
+<script language="javascript" type="text/javascript" src="/javascript/jquery/jquery.js"></script>
+
+<!--[if IE]><script language="javascript" type="text/javascript" src="/javascript/excanvas/excanvas.js"></script><![endif]-->
+
+<script language="javascript" type="text/javascript" src="/javascript/flot/jquery.flot.js"></script>
+
+</head>
+<body>
+<h1>Search</h1>
+<form><input name="q" value="{{q or ''}}" size="60">
+<input type="submit" value="Search">
+</form>
+
+<table>
+{% for doc in results.response.docs %}
+<tr>
+<td class="dbq"><a href="http://www.archive.org/details/{{ doc.identifier }}">{{ doc.identifier }}</a></td>
+<td class="dbq">{{ doc.title.replace(' ', '&nbsp;') | safe}}</td>
+</tr>
+{% endfor %}
+</table>
+
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<title>{% if q %}{{ q + ' - ' }}{% endif %}Internet Archive search</title>
+<style>
+body { font-family: serif; }
+em { background: yellow; font-style: normal; }
+span.selected { background: #ccc; padding: 2px; }
+</style>
+<script language="javascript" type="text/javascript" src="/javascript/jquery/jquery.js"></script>
+
+<!--[if IE]><script language="javascript" type="text/javascript" src="/javascript/excanvas/excanvas.js"></script><![endif]-->
+
+<script language="javascript" type="text/javascript" src="/javascript/flot/jquery.flot.js"></script>
+
+</head>
+<body>
+<h1>Search</h1>
+<form><input name="q" value="{{q or ''}}" size="60">
+<input type="submit" value="Search">
+</form>
+
+{% set max_thumbs = add_thumbs_to_docs(results.response.docs) %}
+
+{% set cols = 4 %}
+
+<table>
+    {# 
+    {% set col = 0 %}
+    {% for doc in results.response.docs if 'thumbs' in doc %}
+        {% set col = col + 1 %}
+        <tr>
+            {% if col != cols %} 
+                <td colspan="{{ cols - (col) }}">{{ col }}</td>
+            {% endif %}
+            <td colspan="{{ col }}">{{ doc.identifier }}</td>
+        </tr>
+    {% endfor %} #}
+{% for thumb_num in range(max_thumbs) %}
+    <tr>
+    {% for doc in results.response.docs if 'thumbs' in doc %}
+        {% set thumbs = doc.thumbs %}
+        <td>
+        {% if len(thumbs.imgs) > thumb_num %}
+            <a href="{{details}}"><img src="{{thumbs.url + thumbs.imgs[thumb_num] }}"></a>
+        {% endif %}
+        </td>
+    {% endfor %}
+    </tr>
+{% endfor %} 
+</table>
+
+</body>
+</html>

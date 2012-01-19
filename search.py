@@ -37,7 +37,16 @@ def find_item(ia):
             return (ia_host, ia_path)
     raise FindItemError
 
-facet_fields = ['noindex', 'mediatype', 'collection', 'language_facet', 'creator_facet', 'subject_facet', 'publisher_facet', 'licenseurl', 'possible-copyright-status', 'rating_facet', 'sponsor_facet', 'camera', 'handwritten']
+facet_fields = ['noindex', 'mediatype', 'collection', 'language_facet',
+    'creator_facet', 'subject_facet', 'publisher_facet', 'licenseurl',
+    'possible-copyright-status', 'rating_facet', 'sponsor_facet',
+    'handwritten', 'source', 'tuner', 'aspect_ratio', 'frames_per_second', 'audio_codec', 'video_codec'] # camera
+
+fl = ['identifier', 'creator', 'title', 'date', 'subject', 'collection',
+    'scanner', 'mediatype', 'description', 'noindex', 'score', 'case-name',
+    'rating', 'sponsor', 'imagecount', 'foldoutcount', 'downloads', 'date_str',
+    'language', 'language_facet']
+
 year_gap = 10
 
 results_per_page = 50 
@@ -51,11 +60,13 @@ solr_select_url = 'http://' + addr + '/solr/select?wt=json' + \
     '&json.nl=arrarr' + \
     '&defType=edismax' + \
     '&qf=text' + \
-    '&fl=identifier,creator,title,date,subject,collection,scanner,mediatype,description,noindex,score,case-name,rating,sponsor,imagecount,foldoutcount,downloads,date_str' + \
+    '&fl=' + ','.join(fl) + \
     '&spellcheck=true' + \
     '&spellcheck.count=1' + \
     '&rows=' + str(results_per_page) + \
     '&facet=true&facet.limit=30&facet.mincount=1' + \
+    '&f.year_from_date.facet.sort=index' + \
+    '&f.year_from_date.facet.limit=-1' + \
     '&facet.range=date&f.date.facet.range.start=0000-01-01T00:00:00Z&f.date.facet.range.end=2015-01-01T00:00:00Z&f.date.facet.range.gap=%2B' + str(year_gap) + 'YEAR' + \
     '&hl=true&hl.snippets=1&hl.fragsize=0&hl.fl=title,creator,subject,collection,description,case-name&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}') + \
     '&f.description.hl.fragsize=200' + \
@@ -133,6 +144,7 @@ lang_map = {
     'gae': 'Scottish Gaelic',
     'mul': 'Multiple',
     'und': 'Undefined',
+    'oji': 'Ojibwa',
     'english-handwritten': 'English (handwritten)',
 }
 
@@ -386,6 +398,25 @@ re_to_esc = re.compile(r'[\[\]:]')
 def esc(s):
     return re_to_esc.sub(lambda m:'\\' + m.group(), s)
 
+@app.route("/thumbs/<identifier>")
+def html_thumbs(identifier):
+    thumb = get_movie_thumb(identifier)
+    return ''.join('<img src="' + thumb['url'] + img + '">' for img in thumb['imgs'])
+
+def add_thumbs_to_docs(docs):
+    max_len = 0
+    for doc in docs:
+        if doc['mediatype'] != 'movies':
+            continue
+        thumbs = get_movie_thumb(doc['identifier'])
+        if not thumbs:
+            continue
+        doc['thumbs'] = thumbs
+        if len(doc['thumbs']['imgs']) > max_len:
+            max_len = len(doc['thumbs']['imgs'])
+
+    return max_len
+
 @app.route("/")
 def do_search():
     q = request.args.get('q')
@@ -438,7 +469,17 @@ def do_search():
     results = search_results['results']
     t_solr += search_results['t_solr']
 
-    return render_template('search.html', q=q, page=page, 
+    valid_views = set(['search', 'grid', 'thumb_compare'])
+    view = request.args.get('view', 'search')
+    if view not in valid_views:
+        view = 'search'
+
+    try:
+        results['facet_counts']['facet_fields']['year_from_date'].reverse()
+    except KeyError:
+        pass
+
+    return render_template(view + '.html', q=q, page=page, 
         results=results, results_per_page=results_per_page, pager=pager,
         quote=quote, comma=comma, int=int, facet_fields=facet_fields, 
         lang_map=lang_map, facet_args=facet_args,
@@ -448,7 +489,7 @@ def do_search():
         get_img_thumb = get_img_thumb, changequery=changequery,
         token_hl=token_hl, t_solr=t_solr, collection_titles=collection_titles,
         did_you_mean=did_you_mean, alt_results=alt_results,
-        fmt_licenseurl=fmt_licenseurl,
+        fmt_licenseurl=fmt_licenseurl, add_thumbs_to_docs=add_thumbs_to_docs,
         date_facet=(int(date_facet) if date_facet is not None else None))
     
 if __name__ == "__main__":

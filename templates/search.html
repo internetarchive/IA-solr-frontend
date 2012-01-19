@@ -8,16 +8,26 @@ body { font-family: serif; }
 em { background: yellow; font-style: normal; }
 span.selected { background: #ccc; padding: 2px; }
 </style>
-<script language="javascript" type="text/javascript" src="/javascript/jquery/jquery.js"></script>
+<script language="javascript" type="text/javascript" src="http://edward.openlibrary.org/javascript/jquery/jquery.js"></script>
 
-<!--[if IE]><script language="javascript" type="text/javascript" src="/javascript/excanvas/excanvas.js"></script><![endif]-->
+<!--[if IE]><script language="javascript" type="text/javascript" src="http://edward.openlibrary.org/javascript/excanvas/excanvas.js"></script><![endif]-->
 
-<script language="javascript" type="text/javascript" src="/javascript/flot/jquery.flot.js"></script>
+<script language="javascript" type="text/javascript" src="http://edward.openlibrary.org/javascript/flot/jquery.flot.js"></script>
+
+<script>
+function get_all_thumbs(identifier) {
+    identifier2 = identifier.replace(/\./g, '');
+    $.get('{{url_for('html_thumbs', identifier='identifier')}}'.replace('identifier', identifier), function(data) {
+        $('#thumbs_' + identifier2).html(data);
+        $('#all_thumbs_' + identifier2).hide();
+    });
+}
+</script>
 
 </head>
 <body>
 <h1>Search</h1>
-<form><input name="q" value="{{q or ''}}" size="60">
+<form><input name="q" value="{{q or ''}}" size="80">
 <input type="submit" value="Search">
 </form>
 
@@ -109,11 +119,12 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
     <table>
     {% for doc in results.response.docs %}
         {% set details = "http://www.archive.org/details/" + doc.identifier %}
+        {% set identifier2 = doc.identifier.replace('.', '') %}
         {% set hl = results.highlighting[doc.identifier] %}
         <!-- {{ hl | pprint | safe }} -->
         <!-- {{ doc | pprint | safe }} -->
         <tr>
-            <td>
+            <td><a name="{{ doc.identifier }}">
             {% if doc.mediatype in mediatypes %}
                 <img src="http://www.archive.org/images/mediatype_{{doc.mediatype|lower}}.gif">
             {% endif %}
@@ -161,10 +172,15 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
             <td colspan="2" valign="top">
             {% set thumb = get_movie_thumb(doc.identifier) %}
             {% if thumb %}
-                {% for img in pick_best(thumb.imgs, num=4) %}
+                {% set thumbs = thumb.imgs if request.args.get('all_thumbs') else pick_best(thumb.imgs, num=4) %}
+                <div id="thumbs_{{identifier2}}">
+                {% for img in thumbs %}
                     <a href="{{details}}"><img src="{{thumb.url + img }}"></a>
                 {% endfor %}
-                <br>
+                </div>
+                {% if not request.args.get('all_thumbs') and len(thumb.imgs) > 4 %}
+                    <span id="all_thumbs_{{ identifier2 }}"><a href="#" onclick="get_all_thumbs('{{ doc.identifier }}'); return false">show all thumbnails</a><br></span>
+                {% endif %}
             {% endif %}
         {% else %}
             <td valign="top">
@@ -199,6 +215,12 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
         {% if doc.foldoutcount %}<b>Foldouts</b>: {{doc.foldoutcount }}{% endif %}
         (<a href="{{url_for('view_mlt', identifier=doc.identifier)}}">more like this</a>)
         <br>
+        {% if doc.language_facet %}<b>Language</b>:
+            {% for l in doc.language_facet %}
+                <a href="?{{changequery({'page':None,'language_facet':l})}}">{{l}}</a>{% if not loop.last %}; {% endif %}
+            {% endfor %}
+            <br>
+        {% endif %}
         {% if doc.subject %}<b>Keywords</b>:
             {% if hl.subject %}
                 {% for s in hl.subject %}
