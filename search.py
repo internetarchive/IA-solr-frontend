@@ -5,6 +5,9 @@ import json, locale, sys, re
 from socket import socket, AF_INET, SOCK_DGRAM, SOL_UDP, SO_BROADCAST, timeout
 from time import time
 
+# Copyright(c)2012 Internet Archive. Software license GPL version 2.
+# Written by Edward Betts <edward@archive.org>
+
 app = Flask(__name__)
 
 re_loc = re.compile('^(ia\d+\.us\.archive\.org):(/\d+/items/(.*))$')
