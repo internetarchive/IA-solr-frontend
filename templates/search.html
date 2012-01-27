@@ -261,14 +261,6 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
             {% endfor %}
             <br>
         {% endif %}
-        {% if doc.item_filename %}
-            <a href="#" onclick="$('#filenames_{{ doc.identifier }}').show(); this.hide(); return false">show filenames</a>
-            <div id="filenames_{{ doc.identifier }}" style="display:none"><pre>
-            {%- for f in doc.item_filename %}
-{{ f }}
-            {%- endfor -%}
-            </pre></div>
-        {% endif %}
         <br>
 
         </td>
