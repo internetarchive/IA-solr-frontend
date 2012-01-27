@@ -33,31 +33,35 @@ function get_all_thumbs(identifier) {
 <input type="submit" value="Search">
 </form>
 
+{%- macro facet_label(facet_heading, value) -%}
+    {% if facet_heading == 'licenseurl' %}
+        {{ fmt_licenseurl(value) }}
+    {% elif facet_heading == 'collection' and value in collection_titles %}
+        {{ collection_titles[value] |truncate(48) }}
+    {% elif facet_heading == 'language_facet' and value.lower() in lang_map %}
+        {{ lang_map[value.lower()] }}
+    {% else %}
+        {{ value | truncate(32, killwords=' ' not in key) -}}
+    {% endif %}
+{%- endmacro -%}
+
 {% macro facet_list(fc, k) %}
     {% if fc.get(k) %}
         {% set facet_heading = 'media type' if k == 'mediatype' else k.replace('_facet', '') %}
         <h2>{{ facet_heading }}</h2>
         {% for key, count in fc[k] %}
-            {% if k == 'licenseurl' %}
-                {% set label = fmt_licenseurl(key) %}
+            {% if key == facet_args_dict.get(k) %}
+                <a href="?{{changequery({'page':None,k:None})}}">[x]</a> <b><span dir="ltr">{{ facet_label(k, key) }}</span></b>
             {% else %}
-                {% set label = key | truncate(48)%}
+                <a href="?{{changequery({'page':None,k:key})}}"><span dir="ltr">{{- facet_label(k, key) -}}</span></a>
             {% endif %}
-            {% if k == 'collection' and key in collection_titles %}
-                {% set label = collection_titles[key] |truncate(48) %}
-            {% elif k == 'language_facet' and key.lower() in lang_map %}
-                {% set label=lang_map[key.lower()] %}
-            {% endif %}
-            {% if key in facet_args_dict[k] %}
-                <a href="?{{changequery({'page':None,k:None})}}">[x]</a> <b>{{ label }}</b> ({{ comma(count) }}) <br>
-            {% else %}
-                <a href="?{{changequery({'page':None,k:key})}}">{{ label }}</a> ({{ comma(count) }})<br>
-            {% endif %}
+            ({{ comma(count) }})<br>
         {% endfor %}
     {% endif %}
 {% endmacro %}
 
 {% if results %}
+    <!-- facet_args_dict: {{ facet_args_dict | pprint | safe }} -->
     <br>
 {% if did_you_mean %}
     {% if alt_results %}Showing results for{% else %}Did you mean{% endif %} 
@@ -70,7 +74,7 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
 
 {% if facet_args or date_facet %}
     {% for k, v in facet_args %}
-    <a href="?{{changequery({'page':None,k:None})}}">[x]</a> <b>{{ k }}: {{ v |truncate(48) }}</b>
+    <a href="?{{changequery({'page':None,k:None})}}">[x]</a> <b>{{ k }}: {{ facet_label(k, v) }}</b>
     {% endfor %}
     {% if date_facet %}
     <a href="?{{changequery({'page':None,'date_facet':date_facet})}}">[x]</a> <b>decade: {{date_facet}}-{{date_facet+10}}</b>
@@ -98,7 +102,12 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
                 [{{ y[:4] }}, {{ count }}]{% if not loop.last %},{% endif %}
             {%- endfor %} ];
 
-            var options = { };
+            var options = { 
+                yaxis: {
+                    transform: function (v) { return Math.log(v); },
+                    inverseTransform: function (v) { return Math.exp(v); }
+                }
+            };
 
             var series = {
                 data: years,
@@ -115,14 +124,18 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
 
     {% endif %}
 
-    <table>
+    <table width="100%">
     <tr><td valign="top">
     {% set mediatypes = ['texts', 'movies', 'audio', 'image', 'etree', 'software'] %}
     <table>
     {% for doc in results.response.docs %}
         {% set details = "http://www.archive.org/details/" + doc.identifier %}
         {% set identifier2 = doc.identifier.replace('.', '') %}
-        {% set hl = results.highlighting[doc.identifier] %}
+        {% if 'highlighting' in results %}
+            {% set hl = results.highlighting[doc.identifier] %}
+        {% else %}
+            {% set hl = {} %}
+        {% endif %}
         <!-- {{ hl | pprint | safe }} -->
         <!-- {{ doc | pprint | safe }} -->
         <tr>
@@ -160,7 +173,11 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
                 <td valign="top" rowspan="2" align="right">
                     {% if doc.mediatype == 'texts' and doc.scanner %}
                         <a href="{{details}}"><img src="http://www.archive.org/download/{{ doc.identifier }}/page/{{doc.identifier}}_cover_h100.jpg" height="150"></a>
-                    {% elif doc.mediatype == 'image' %}
+                    {% elif doc.item_filename %}
+                        {% for f in doc.item_filename if f.endswith('thumb.jpg') %}
+                            <a href="{{details}}"><img src="http://www.archive.org/download/{{ doc.identifier }}/{{f}}"></a>
+                        {% endfor %}
+                    {% elif doc.mediatype in ('image', 'software') %}
                         {% set thumb_url = get_img_thumb(doc.identifier) %}
                         {% if thumb_url %}
                             <a href="{{details}}"><img src="{{thumb_url}}"></a>
@@ -209,7 +226,7 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
             <br>
         {% endif %}
         
-        {% if doc.date %}<b>Date</b>: {{doc.date_str | default(doc.date[:10]) }}{% endif %}
+        {% if doc.date %}<b>Date</b>: {{doc.date_str | default(doc.date[:10]) }} {% endif %}
         {% if doc.sponsor %}<b>Sponsor</b>: <a href="?{{changequery({'page':None,'sponsor':doc.sponsor})}}">{{doc.sponsor}}</a>{% endif %}
         {% if doc.rating %}<b>Rating</b>: {{doc.rating }}{% endif %}
         {% if doc.imagecount %}<b>Images</b>: {{doc.imagecount }}{% endif %}
@@ -243,6 +260,14 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
                 <a href="?{{changequery({'page':None,'collection':c})}}">{{collection_titles.get(c, c) }}</a>{% if not loop.last %}; {% endif %}
             {% endfor %}
             <br>
+        {% endif %}
+        {% if doc.item_filename %}
+            <a href="#" onclick="$('#filenames_{{ doc.identifier }}').show(); this.hide(); return false">show filenames</a>
+            <div id="filenames_{{ doc.identifier }}" style="display:none"><pre>
+            {%- for f in doc.item_filename %}
+{{ f }}
+            {%- endfor -%}
+            </pre></div>
         {% endif %}
         <br>
 
@@ -310,6 +335,13 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
         <a href="?{{changequery({'page':pager.pages})}}">Last&nbsp;&raquo;</a>
     {% endif %}
 
+{% endif %}
+{% if 'debug' in results %}
+    <pre>{{ results.debug.timing | pprint }}</pre>
+    {% for k, v in results.debug.explain.items() %}
+        {{ k }}<br>
+        <pre>{{ v }}</pre>
+    {% endfor %}
 {% endif %}
 {% endif %}
 </body>
