@@ -43,19 +43,23 @@ def find_item(ia):
 facet_fields = ['noindex', 'mediatype', 'collection', 'language_facet',
     'creator_facet', 'subject_facet', 'publisher_facet', 'licenseurl',
     'possible-copyright-status', 'rating_facet', 'sponsor_facet',
-    'handwritten', 'source', 'tuner', 'aspect_ratio', 'frames_per_second', 'audio_codec', 'video_codec'] # camera
+    'handwritten', 'source', 'tv_channel', 'tv_category', 'tv_program', 
+    'tv_episode_name', 'tv_original_year', 'tv_starring', ]
+    # 'tuner', 'aspect_ratio', 'frames_per_second', 'audio_codec', 'video_codec', 'camera' ]
 
 fl = ['identifier', 'creator', 'title', 'date', 'subject', 'collection',
     'scanner', 'mediatype', 'description', 'noindex', 'score', 'case-name',
     'rating', 'sponsor', 'imagecount', 'foldoutcount', 'downloads', 'date_str',
-    'language', 'language_facet']
+    'language', 'language_facet', 'item_filename']
 
 year_gap = 10
 
-results_per_page = 50 
+results_per_page = 30 
 
 def quote(s):
     return quote_plus(s.encode('utf-8')) if not isinstance(s, int) else s
+
+solr_hl = '&hl=true&hl.snippets=1&hl.fragsize=0&hl.fl=title,creator,subject,collection,description,case-name&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}')
 
 addr = 'ol-search-inside:8984'
 addr = 'localhost:6081'
@@ -67,87 +71,43 @@ solr_select_url = 'http://' + addr + '/solr/select?wt=json' + \
     '&spellcheck=true' + \
     '&spellcheck.count=1' + \
     '&rows=' + str(results_per_page) + \
-    '&facet=true&facet.limit=30&facet.mincount=1' + \
+    '&facet=true&facet.limit=20&facet.mincount=1' + \
     '&f.year_from_date.facet.sort=index' + \
     '&f.year_from_date.facet.limit=-1' + \
+    '&f.tv_original_year.facet.sort=index' + \
+    '&f.tv_original_year.facet.limit=-1' + \
     '&facet.range=date&f.date.facet.range.start=0000-01-01T00:00:00Z&f.date.facet.range.end=2015-01-01T00:00:00Z&f.date.facet.range.gap=%2B' + str(year_gap) + 'YEAR' + \
-    '&hl=true&hl.snippets=1&hl.fragsize=0&hl.fl=title,creator,subject,collection,description,case-name&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}') + \
     '&f.description.hl.fragsize=200' + \
     '&bq=(*:* -collection:ourmedia -collection:opensource* collection:*)^10' + \
     '&q.op=AND'
-#    '&debugQuery=true' + \
 #    '&spellcheck.collate=true' + \
 #    '&spellcheck.maxCollationTries=5' + \
 #    '&spellcheck.accuracy=0.5' + \
 #    '&facet.range=imagecount&f.imagecount.facet.range.start=0&f.imagecount.facet.range.end=1000000&f.imagecount.facet.range.gap=100' + \
 #    '&facet.range=downloads&f.downloads.facet.range.start=0&f.downloads.facet.range.end=1000000&f.downloads.facet.range.gap=100,10000' + \
 
+
+
 lang_map = {
-    'eng': 'English',
-    'fre': 'French',
-    'ger': 'German',
-    'spa': 'Spanish',
-    'ita': 'Italian',
-    'lat': 'Latin',
-    'rus': 'Russian',
-    'dut': 'Dutch',
-    'ara': 'Arabic',
-    'swe': 'Swedish',
-    'por': 'Portuguese',
-    'dan': 'Danish',
-    'hun': 'Hungarian',
-    'cze': 'Czech',
-    'tel': 'Telugu',
-    'pol': 'Polish',
-    'urd': 'Urdu',
-    'nor': 'Norwegian',
-    'rum': 'Romanian',
-    'ice': 'Icelandic',
-    'hrv': 'Croatian',
-    'arm': 'Armenian',
-    'srp': 'Serbian',
-    'swa': 'Swahili',
-    'ind': 'Indonesian',
-    'may': 'Malay',
-    'slv': 'Slovenian',
-    'tur': 'Turkish',
-    'fin': 'Finnish',
-    'wel': 'Welsh',
-    'bul': 'Bulgarian',
-    'afr': 'Afrikaans',
-    'slo': 'Slovak',
-    'cat': 'Catalan',
-    'san': 'Sanskrit',
-    'rum': 'Romanian',
-    'hin': 'Hindi',
-    'chi': 'Chinese',
-    'vie': 'Vietnamese',
-    'glg': 'Galician',
-    'tam': 'Tamil',
-    'jpn': 'Japanese',
-    'tgl': 'Tagalog',
-    'baq': 'Basque',
-    'heb': 'Hebrew',
-    'gle': 'Irish',
-    'kan': 'Kannada',
-    'ger': 'Deutsch',
-    'bos': 'Bosnian',
-    'ukr': 'Ukrainian',
-    'fre': 'Francais',
-    'ita': 'Italiano',
-    'mlt': 'Maltese',
-    'est': 'Estonian',
-    'aze': 'Azerbaijani',
-    'lit': 'Lithuanian',
-    'por': 'Portuguese',
-    'alb': 'Albanian',
-    'tha': 'Thai',
-    'gre': 'Greek',
-    'grc': 'Ancient Greek', 
-    'gae': 'Scottish Gaelic',
-    'mul': 'Multiple',
-    'und': 'Undefined',
-    'oji': 'Ojibwa',
+    'eng': 'English', 'fre': 'French', 'ger': 'German', 'spa': 'Spanish',
+    'ita': 'Italian', 'ota': 'Ottoman Turkish', 'kor': 'Korean',
+    'lat': 'Latin', 'rus': 'Russian', 'dut': 'Dutch', 'ara': 'Arabic',
+    'swe': 'Swedish', 'por': 'Portuguese', 'dan': 'Danish', 'hun': 'Hungarian',
+    'cze': 'Czech', 'tel': 'Telugu', 'pol': 'Polish', 'urd': 'Urdu',
+    'nor': 'Norwegian', 'rum': 'Romanian', 'ice': 'Icelandic', 
+    'hrv': 'Croatian', 'arm': 'Armenian', 'srp': 'Serbian', 'swa': 'Swahili',
+    'ind': 'Indonesian', 'may': 'Malay', 'slv': 'Slovenian', 'tur': 'Turkish',
+    'fin': 'Finnish', 'wel': 'Welsh', 'bul': 'Bulgarian', 'afr': 'Afrikaans',
+    'slo': 'Slovak', 'cat': 'Catalan', 'san': 'Sanskrit', 'rum': 'Romanian',
+    'hin': 'Hindi', 'chi': 'Chinese', 'vie': 'Vietnamese', 'glg': 'Galician',
+    'tam': 'Tamil', 'jpn': 'Japanese', 'tgl': 'Tagalog', 'baq': 'Basque',
+    'heb': 'Hebrew', 'gle': 'Irish', 'kan': 'Kannada', 'ger': 'Deutsch',
+    'bos': 'Bosnian', 'ukr': 'Ukrainian', 'fre': 'Francais', 'ita': 'Italiano',
+    'mlt': 'Maltese', 'est': 'Estonian', 'aze': 'Azerbaijani', 'ban': 'Balinese',
+    'lit': 'Lithuanian', 'por': 'Portuguese', 'alb': 'Albanian', 'tha': 'Thai',
+    'gre': 'Greek', 'grc': 'Ancient Greek', 'gae': 'Scottish Gaelic',
+    'mul': 'Multiple', 'und': 'Undefined', 'oji': 'Ojibwa', 'yid': 'Yiddish',
+    'zxx': 'No linguistic content',
     'english-handwritten': 'English (handwritten)',
 }
 
@@ -384,8 +344,16 @@ def view_mlt(identifier):
     collection_titles = get_collection_titles(data)
     return render_template('mlt.html', identifier=identifier, mlt=data, get_movie_thumb=get_movie_thumb, pick_best=pick_best, collection_titles=collection_titles)
 
+re_all_field = re.compile(r'^([A-Za-z0-9_-]+):\*')
 def search(q, url_params):
     url = solr_select_url + '&q=' + quote(q) + url_params
+    if q != '*:*' and not re_all_field.match(q):
+        url += '&hl=true&hl.snippets=1&hl.fragsize=0&hl.fl=title,creator,subject,collection,description,case-name&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}')
+    if request.args.get('debug'):
+        url += '&debugQuery=true'
+    sort = request.args.get('sort')
+    if sort:
+        url += '&sort=' + quote(sort)
     t0_solr = time()
     f = urlopen(url)
     reply = f.read()
@@ -425,6 +393,7 @@ def do_search():
     q = request.args.get('q')
     if not q:
         return render_template('search.html')
+    q = q.strip()
 
     facet_args = [(f, request.args[f]) for f in facet_fields if f in request.args]
     facet_args_dict = dict(facet_args)
@@ -464,7 +433,9 @@ def do_search():
             return solr_error.value
         alt_results = True
 
+    t0_solr = time()
     collection_titles = get_collection_titles(results)
+    t_solr += time() - t0_solr
 
     pager = build_pager(results['response']['numFound'], page)
 
@@ -477,10 +448,11 @@ def do_search():
     if view not in valid_views:
         view = 'search'
 
-    try:
-        results['facet_counts']['facet_fields']['year_from_date'].reverse()
-    except KeyError:
-        pass
+    for f in 'tv_original_year', 'year_from_date':
+        try:
+            results['facet_counts']['facet_fields'][f].reverse()
+        except KeyError:
+            pass
 
     return render_template(view + '.html', q=q, page=page, 
         results=results, results_per_page=results_per_page, pager=pager,
