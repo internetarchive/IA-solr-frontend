@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect
 from urllib import urlopen, quote_plus
 import json, locale, sys, re
 
@@ -50,7 +50,7 @@ facet_fields = ['noindex', 'mediatype', 'collection', 'language_facet',
 fl = ['identifier', 'creator', 'title', 'date', 'subject', 'collection',
     'scanner', 'mediatype', 'description', 'noindex', 'score', 'case-name',
     'rating', 'sponsor', 'imagecount', 'foldoutcount', 'downloads', 'date_str',
-    'language', 'language_facet', 'item_filename']
+    'language', 'language_facet', 'item_filename', 'closed_captions']
 
 year_gap = 10
 
@@ -59,14 +59,14 @@ results_per_page = 30
 def quote(s):
     return quote_plus(s.encode('utf-8')) if not isinstance(s, int) else s
 
-solr_hl = '&hl=true&hl.snippets=1&hl.fragsize=0&hl.fl=title,creator,subject,collection,description,case-name&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}')
+solr_hl = '&hl=true&hl.snippets=1&hl.fragsize=0&hl.fl=title,creator,subject,collection,description,case-name,closed_captions&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}')
 
 addr = 'ol-search-inside:8984'
 addr = 'localhost:6081'
 solr_select_url = 'http://' + addr + '/solr/select?wt=json' + \
     '&json.nl=arrarr' + \
     '&defType=edismax' + \
-    '&qf=text' + \
+    '&qf=text+closed_captions' + \
     '&fl=' + ','.join(fl) + \
     '&spellcheck=true' + \
     '&spellcheck.count=1' + \
@@ -78,6 +78,7 @@ solr_select_url = 'http://' + addr + '/solr/select?wt=json' + \
     '&f.tv_original_year.facet.limit=-1' + \
     '&facet.range=date&f.date.facet.range.start=0000-01-01T00:00:00Z&f.date.facet.range.end=2015-01-01T00:00:00Z&f.date.facet.range.gap=%2B' + str(year_gap) + 'YEAR' + \
     '&f.description.hl.fragsize=200' + \
+    '&f.closed_captions.hl.fragsize=200' + \
     '&bq=(*:* -collection:ourmedia -collection:opensource* collection:*)^10' + \
     '&q.op=AND'
 #    '&spellcheck.collate=true' + \
@@ -85,8 +86,6 @@ solr_select_url = 'http://' + addr + '/solr/select?wt=json' + \
 #    '&spellcheck.accuracy=0.5' + \
 #    '&facet.range=imagecount&f.imagecount.facet.range.start=0&f.imagecount.facet.range.end=1000000&f.imagecount.facet.range.gap=100' + \
 #    '&facet.range=downloads&f.downloads.facet.range.start=0&f.downloads.facet.range.end=1000000&f.downloads.facet.range.gap=100,10000' + \
-
-
 
 lang_map = {
     'eng': 'English', 'fre': 'French', 'ger': 'German', 'spa': 'Spanish',
@@ -102,7 +101,7 @@ lang_map = {
     'hin': 'Hindi', 'chi': 'Chinese', 'vie': 'Vietnamese', 'glg': 'Galician',
     'tam': 'Tamil', 'jpn': 'Japanese', 'tgl': 'Tagalog', 'baq': 'Basque',
     'heb': 'Hebrew', 'gle': 'Irish', 'kan': 'Kannada', 'ger': 'Deutsch',
-    'bos': 'Bosnian', 'ukr': 'Ukrainian', 'fre': 'Francais', 'ita': 'Italiano',
+    'bos': 'Bosnian', 'ukr': 'Ukrainian',
     'mlt': 'Maltese', 'est': 'Estonian', 'aze': 'Azerbaijani', 'ban': 'Balinese',
     'lit': 'Lithuanian', 'por': 'Portuguese', 'alb': 'Albanian', 'tha': 'Thai',
     'gre': 'Greek', 'grc': 'Ancient Greek', 'gae': 'Scottish Gaelic',
@@ -110,6 +109,8 @@ lang_map = {
     'zxx': 'No linguistic content',
     'english-handwritten': 'English (handwritten)',
 }
+
+rev_lang_map = dict((v.lower(), k) for k, v in lang_map.iteritems())
 
 def test_quote():
     assert quote('x') == 'x'
@@ -348,7 +349,7 @@ re_all_field = re.compile(r'^([A-Za-z0-9_-]+):\*')
 def search(q, url_params):
     url = solr_select_url + '&q=' + quote(q) + url_params
     if q != '*:*' and not re_all_field.match(q):
-        url += '&hl=true&hl.snippets=1&hl.fragsize=0&hl.fl=title,creator,subject,collection,description,case-name&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}')
+        url += '&hl=true&hl.snippets=1&hl.fragsize=0&hl.fl=title,creator,subject,collection,description,case-name,closed_captions&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}')
     if request.args.get('debug'):
         url += '&debugQuery=true'
     sort = request.args.get('sort')
@@ -388,19 +389,45 @@ def add_thumbs_to_docs(docs):
 
     return max_len
 
+@app.route("/collection_autocomplete")
+def collection_autocomplete():
+    if 'term' not in request.args:
+        return '[]'
+    term = request.args['term'].lower()
+    found = []
+    for line in open('/home/edward/src/ia_solr_frontend/collections'):
+        if line.lower().startswith(term):
+            found.append(line[:-1])
+        elif found:
+            break
+    return json.dumps(found)
+
+re_long_repeating_phrase = re.compile('(.{6}){4,}')
+def strip_long_repeating_phrase(s):
+    return re_long_repeating_phrase.sub(lambda m:m.group(1), s)
+
+def fix_language(k, v):
+    if k != 'language_facet' or not rev_lang_map.get(v.lower()):
+        return v
+    return rev_lang_map[v.lower()]
+
 @app.route("/")
 def do_search():
     q = request.args.get('q')
     if not q:
-        return render_template('search.html')
+        return render_template('search.html', lang_map=lang_map)
     q = q.strip()
 
-    facet_args = [(f, request.args[f]) for f in facet_fields if f in request.args]
+    new_query_string = '&'.join(k + '=' + fix_language(k, v) for k, v in (i.split('=', 1) for i in request.query_string.split('&') if '=' in i) if v != '')
+    if request.query_string != new_query_string:
+        return redirect('?' + new_query_string)
+
+    facet_args = [(f, request.args[f]) for f in facet_fields if request.args.get(f)]
     facet_args_dict = dict(facet_args)
     page = int(request.args.get('page', 1))
     start = results_per_page * (page-1)
     #fq = ''.join('&fq=' + quote('{!tag=%s}{!term f=%s}%s' % (f, f, request.args[f])) for f in facet_fields if f in request.args)
-    fq = ''.join('&fq=' + quote('{!tag=%s}%s:"%s"' % (f, f, esc(request.args[f]))) for f in facet_fields if f in request.args)
+    fq = ''.join('&fq=' + quote('{!tag=%s}%s:"%s"' % (f, f, esc(request.args[f]))) for f in facet_fields if request.args.get(f))
     date_range = request.args.get('date_range')
     date_facet = request.args.get('date_facet')
     if date_range:
@@ -465,6 +492,7 @@ def do_search():
         token_hl=token_hl, t_solr=t_solr, collection_titles=collection_titles,
         did_you_mean=did_you_mean, alt_results=alt_results,
         fmt_licenseurl=fmt_licenseurl, add_thumbs_to_docs=add_thumbs_to_docs,
+        strip_long_repeating_phrase=strip_long_repeating_phrase,
         date_facet=(int(date_facet) if date_facet is not None else None))
     
 if __name__ == "__main__":

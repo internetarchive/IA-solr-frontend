@@ -10,7 +10,9 @@ body { font-family: serif; }
 em { background: yellow; font-style: normal; }
 span.selected { background: #ccc; padding: 2px; }
 </style>
+<link type="text/css" href="http://edward.openlibrary.org/javascript/jquery-ui/css/smoothness/jquery-ui.css" rel="Stylesheet" />  
 <script language="javascript" type="text/javascript" src="http://edward.openlibrary.org/javascript/jquery/jquery.js"></script>
+<script language="javascript" type="text/javascript" src="http://edward.openlibrary.org/javascript/jquery-ui/jquery-ui.js"></script>
 
 <!--[if IE]><script language="javascript" type="text/javascript" src="http://edward.openlibrary.org/javascript/excanvas/excanvas.js"></script><![endif]-->
 
@@ -24,14 +26,77 @@ function get_all_thumbs(identifier) {
         $('#all_thumbs_' + identifier2).hide();
     });
 }
+
+$(function () {
+    var languages = [
+        {% for v in lang_map.itervalues() | sort %}
+            '{{v}}', 
+        {% endfor %}
+    ];
+    $( '#collection' ).autocomplete({ source: 'http://edward.openlibrary.org/search/collection_autocomplete' });
+    $( '#language' ).autocomplete({ source: languages });
+});
+
+function show_filter(filter) {
+    $('#filter_' + filter).show();
+    $('#filter_link_' + filter).hide();
+    return false;
+}
+
+function hide_filter(filter) {
+    $('#filter_' + filter).hide();
+    $('#filter_link_' + filter).show();
+    return false;
+}
+
 </script>
 
 </head>
 <body>
 <h1>Search</h1>
-<form><input name="q" value="{{q or ''}}" size="80">
-<input type="submit" value="Search">
+<form>
+<input name="q" value="{{q or ''}}" size="80">
+<input type="submit" value="Search"><br>
+filter:
+<a href="#" id="filter_link_collection" onclick="return show_filter('collection');">Collection</a>
+<a href="#" id="filter_link_language" onclick="return show_filter('language');">Language</a>
+<a href="#" id="filter_link_mediatype" onclick="return show_filter('mediatype');">Media type</a>
+<a href="#" id="filter_link_tv_category" onclick="return show_filter('tv_category');">TV category</a>
+<br>
+
+<div id="filter_collection" style="display:none">
+<a href="#" onclick="$('#collection').val(''); return hide_filter('collection');">[x]</a>
+<label for="collection">collection:</label><input name="collection" id="collection" autocomplete="off" size="60">
+</div>
+
+<div id="filter_language" style="display:none">
+<a href="#" onclick="$('#language').val(''); return hide_filter('language');">[x]</a>
+<label for="language_facet">language:</label><input name="language_facet" id="language" autocomplete="off" size="60">
+</div>
+
+
+<div id="filter_mediatype" style="display:none">
+<a href="#" onclick="return hide_filter('mediatype');">[x]</a>
+<label for="mediatype">media type:</label>
+<input name="mediatype" type="radio" value="" checked="checked">any</input>
+{% for mediatype in ['texts', 'movies', 'audio', 'image', 'web', 'etree', 'software', 'data', 'collection', 'other'] %}
+<input name="mediatype" type="radio" value="{{ mediatype }}">{{ mediatype }}</input>
+{% endfor %}<br>
+</div>
+
+<div id="filter_tv_category" style="display:none">
+<a href="#" onclick="return hide_filter('tv_category');">[x]</a>
+<label for="tv_category">TV category:</label>
+<input name="tv_category" type="radio" value="" checked="checked">any</input>
+{% for tv_category in ['Series/Special', 'News/Business', 'Family/Children', 'Education', 'Religious', 'Music/Art', 'Movie', 'Sports'] %}
+<input name="tv_category" type="radio" value="{{ tv_category }}">{{ tv_category }}</input>
+{% endfor %}<br>
+</div>
+
 </form>
+
+<script>
+</script>
 
 {%- macro facet_label(facet_heading, value) -%}
     {% if facet_heading == 'licenseurl' %}
@@ -44,6 +109,28 @@ function get_all_thumbs(identifier) {
         {{ value | truncate(32, killwords=' ' not in key) -}}
     {% endif %}
 {%- endmacro -%}
+
+{%- macro fragments(doc, hl, field) -%}
+    {% if hl[field] %}
+        {% set hl_desc = hl[field][0] %}
+        {% set hl_desc2 = hl_desc.replace('{{{', '').replace('}}}', '') %}
+        {% if hl_desc2[:20] != doc[field][:20] %}&hellip;{% endif %}
+        {% for token_type, token in token_hl(hl_desc) %}
+            {% if token_type == 'text' %}
+                {% for line in token.splitlines() if line %}
+                    {{ strip_long_repeating_phrase(line) }}{% if not loop.last %}<br>{% endif %}
+                {% endfor %}
+            {% else %}<em>{{ token }}</em>{% endif %}
+        {% endfor %}
+        {% if hl_desc2[-20:] != doc[field][-20:] %}&hellip;{% endif %}
+    {% else %}
+        {% for line in doc[field][:200].splitlines() if line %}
+            {{ line }}{% if not loop.last %}<br>{% endif %}
+        {% endfor %}
+        {% if len(doc[field]) > 200 %}&hellip;{% endif %}
+    {% endif %}
+{%- endmacro -%}
+
 
 {% macro facet_list(fc, k) %}
     {% if fc.get(k) %}
@@ -136,8 +223,6 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
         {% else %}
             {% set hl = {} %}
         {% endif %}
-        <!-- {{ hl | pprint | safe }} -->
-        <!-- {{ doc | pprint | safe }} -->
         <tr>
             <td><a name="{{ doc.identifier }}">
             {% if doc.mediatype in mediatypes %}
@@ -204,26 +289,13 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
         {% else %}
             <td valign="top">
         {% endif %}
+
         {% if doc.description %}
-            {% if hl.description %}
-                {% set hl_desc = hl.description[0] %}
-                {% set hl_desc2 = hl_desc.replace('{{{', '').replace('}}}', '') %}
-                {% if hl_desc2[:20] != doc.description[:20] %}&hellip;{% endif %}
-                {% for token_type, token in token_hl(hl_desc) %}
-                    {% if token_type == 'text' %}
-                        {% for line in token.splitlines() if line %}
-                            {{ line }}{% if not loop.last %}<br>{% endif %}
-                        {% endfor %}
-                    {% else %}<em>{{ token }}</em>{% endif %}
-                {% endfor %}
-                {% if hl_desc2[-20:] != doc.description[-20:] %}&hellip;{% endif %}
-            {% else %}
-                {% for line in doc.description[:200].splitlines() if line %}
-                    {{ line }}{% if not loop.last %}<br>{% endif %}
-                {% endfor %}
-                {% if len(doc.description) > 200 %}&hellip;{% endif %}
-            {% endif %}
-            <br>
+            {{ fragments(doc, hl, 'description') }}<br>
+        {% endif %}
+        {% if doc.closed_captions %}
+            <b>Closed captions</b><br>
+            {{ fragments(doc, hl, 'closed_captions') }}<br>
         {% endif %}
         
         {% if doc.date %}<b>Date</b>: {{doc.date_str | default(doc.date[:10]) }} {% endif %}
