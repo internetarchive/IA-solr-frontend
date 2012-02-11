@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, Response
 from urllib import urlopen, quote_plus
 import json, locale, sys, re
 
@@ -50,7 +50,37 @@ facet_fields = ['noindex', 'mediatype', 'collection', 'language_facet',
 fl = ['identifier', 'creator', 'title', 'date', 'subject', 'collection',
     'scanner', 'mediatype', 'description', 'noindex', 'score', 'case-name',
     'rating', 'sponsor', 'imagecount', 'foldoutcount', 'downloads', 'date_str',
-    'language', 'language_facet', 'item_filename', 'closed_captions']
+    'language', 'language_facet', 'item_filename']
+
+list_fields = set(['collection', 'tv_starring', 'creator', 'language', 'subject', 'contributor', 'uploader'])
+
+solr_fields = set(fl + ['closed_captions'] + facet_fields)
+re_field_pattern = re.compile('(' + '|'.join(solr_fields) + '):')
+
+field_set = {
+    'default': ['identifier', 'mediatype', 'title', 'date_str', 'collection', 'downloads'],
+    'tv': ['identifier', 'title', 'date_str', 'collection', 'source', 'tuner',
+        'rating', 'tv_channel', 'tv_category', 'tv_program', 'tv_episode_name',
+        'tv_original_year', 'tv_starring', 'audio_codec', 'video_codec',
+        'frames_per_second', 'start_localtime', 'start_time', 'stop_time',
+        'runtime', 'aspect_ratio', 'closed_captioning'],
+    'books': ['identifier', 'title', 'creator', 'date_str', 'collection',
+        'publisher', 'language', 'scanningcenter', 'subject', 'sponsor',
+        'imagecount', 'foldoutcount', 'repub_state', 'ppi', 'scandate',
+        'addeddate', 'publicdate', 'sponsordate', 'contributor', 'uploader',
+        'scanner', 'operator', 'downloads', 'handwritten'],
+    'software': ['identifier', 'title', 'date_str', 'collection',
+        'publisher', 'subject', 'uploader', 'downloads', ],
+    'all': ['identifier', 'mediatype', 'title', 'creator', 'date_str', 'collection',
+        'publisher', 'language', 'scanningcenter', 'subject', 'sponsor',
+        'imagecount', 'foldoutcount', 'repub_state', 'ppi', 'scandate',
+        'addeddate', 'publicdate', 'sponsordate', 'contributor', 'uploader',
+        'scanner', 'operator', 'downloads', 'handwritten', 'source', 'tuner',
+        'rating', 'tv_channel', 'tv_category', 'tv_program', 'tv_episode_name',
+        'tv_original_year', 'tv_starring', 'audio_codec', 'video_codec',
+        'frames_per_second', 'start_localtime', 'start_time', 'stop_time',
+        'runtime', 'aspect_ratio', 'closed_captioning'],
+}
 
 year_gap = 10
 
@@ -59,7 +89,13 @@ results_per_page = 30
 def quote(s):
     return quote_plus(s.encode('utf-8')) if not isinstance(s, int) else s
 
-solr_hl = '&hl=true&hl.snippets=1&hl.fragsize=0&hl.fl=title,creator,subject,collection,description,case-name,closed_captions&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}')
+solr_hl = '&hl=true' + \
+    '&hl.snippets=1' + \
+    '&hl.fragsize=0' + \
+    '&f.description.hl.alternateField=description' + \
+    '&f.closed_captions.hl.alternateField=closed_captions' + \
+    '&f.closed_captions.hl.maxAlternateFieldLength=200' + \
+    '&hl.fl=title,creator,subject,collection,description,case-name,closed_captions&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}')
 
 addr = 'ol-search-inside:8984'
 addr = 'localhost:6081'
@@ -67,18 +103,21 @@ solr_select_url = 'http://' + addr + '/solr/select?wt=json' + \
     '&json.nl=arrarr' + \
     '&defType=edismax' + \
     '&qf=text+closed_captions' + \
-    '&fl=' + ','.join(fl) + \
-    '&spellcheck=true' + \
-    '&spellcheck.count=1' + \
-    '&rows=' + str(results_per_page) + \
     '&facet=true&facet.limit=20&facet.mincount=1' + \
+    '&f.language_facet.facet.method=enum' + \
+    '&f.mediatype.facet.method=enum' + \
+    '&f.tv_category.facet.method=enum' + \
+    '&f.tv_channel.facet.method=enum' + \
+    '&f.language_facet.facet.method=enum' + \
     '&f.year_from_date.facet.sort=index' + \
+    '&f.noindex.facet.sort=index' + \
+    '&f.noindex.facet.mincount=0' + \
     '&f.year_from_date.facet.limit=-1' + \
     '&f.tv_original_year.facet.sort=index' + \
     '&f.tv_original_year.facet.limit=-1' + \
     '&facet.range=date&f.date.facet.range.start=0000-01-01T00:00:00Z&f.date.facet.range.end=2015-01-01T00:00:00Z&f.date.facet.range.gap=%2B' + str(year_gap) + 'YEAR' + \
     '&f.description.hl.fragsize=200' + \
-    '&f.closed_captions.hl.fragsize=200' + \
+    '&f.closed_captions.hl.fragsize=400' + \
     '&bq=(*:* -collection:ourmedia -collection:opensource* collection:*)^10' + \
     '&q.op=AND'
 #    '&spellcheck.collate=true' + \
@@ -187,6 +226,8 @@ def parse_suggestions(q, suggestions):
     reply = []
     xpos = 0
     for word, s in suggestions:
+        if s['startOffset'] < xpos:
+            continue
         if s['startOffset'] > xpos:
             reply.append(('orig', q[xpos:s['startOffset']]))
         reply.append(('fix', s['suggestion'][0]))
@@ -229,6 +270,19 @@ def test_parse_suggestions():
     expect = [('fix', 'united'), ('orig', ' '), ('fix', 'states')]
     assert parse_suggestions(q, suggestions) == expect
 
+    q = "united stats"
+    suggestions = [["united stats",{
+                    "numFound":1,
+                    "startOffset":0,
+                    "endOffset":12,
+                    "suggestion":["united states"]}],
+                  ["stats",{
+                    "numFound":1,
+                    "startOffset":7,
+                    "endOffset":12,
+                    "suggestion":["states"]}]]
+    expect = [('fix', 'united states')]
+    assert parse_suggestions(q, suggestions) == expect
 
 re_thumb_dir_link = re.compile('<a href="(.+\.thumbs/)">')
 re_link = re.compile('<a href="(.+)">')
@@ -260,6 +314,9 @@ def changequery(new_args):
     args = dict((k, v) for k, v in request.args.items() if v and k not in new_args)
     args.update(dict((k, v) for k, v in new_args.items() if v is not None))
     return '&'.join('%s=%s' % (k, quote(v)) for k, v in args.items())
+
+def zap_field(fields, cur):
+    return changequery({'field_set': None, 'fields': ','.join(f for f in fields if f != cur)})
 
 def test_changequery():
     with app.test_client() as c:
@@ -333,23 +390,35 @@ def view_mlt(identifier):
     url = 'http://' + addr + '/solr/mlt?wt=json' + \
         '&json.nl=arrarr' + \
         '&q=identifier:' + quote(identifier) + \
-        '&mlt.fl=creator,title,subject,collection,mediatype,description,case-name,sponsor' + \
+        '&mlt.fl=creator,title,subject,collection,mediatype,description,case-name,sponsor,closed_captions' + \
         '&mlt.mintf=1' + \
+        '&fl=score,*' + \
         '&indent=on' + \
-        '&rows=20'
+        '&rows=200'
     ret = urlopen(url).read()
     try:
         data = json.loads(ret)
     except ValueError:
         return ret
     collection_titles = get_collection_titles(data)
-    return render_template('mlt.html', identifier=identifier, mlt=data, get_movie_thumb=get_movie_thumb, pick_best=pick_best, collection_titles=collection_titles)
+    return render_template('mlt.html', identifier=identifier, mlt=data, get_movie_thumb=get_movie_thumb, pick_best=pick_best, collection_titles=collection_titles, len=len)
 
 re_all_field = re.compile(r'^([A-Za-z0-9_-]+):\*')
-def search(q, url_params):
+def search(q, url_params, spellcheck=True):
     url = solr_select_url + '&q=' + quote(q) + url_params
+    url += '&rows=' + ('100' if request.args.get('view') == 'grid' else str(results_per_page))
+    if request.args.get('field_set'):
+        url += '&fl=' + ','.join(fl + field_set[request.args['field_set']])
+    else:
+        url += '&fl=' + ','.join(fl) + request.args.get('fields','')
+
+    if spellcheck:
+        #spellcheck_q = quote(re_field_pattern.sub('', q))
+        #print spellcheck_q
+        url += '&spellcheck=true&spellcheck.count=1'
+        #url += '&spellcheck=true&spellcheck.count=1&spellcheck.onlyMorePopular=true&spellcheck.q=' + quote(q)
     if q != '*:*' and not re_all_field.match(q):
-        url += '&hl=true&hl.snippets=1&hl.fragsize=0&hl.fl=title,creator,subject,collection,description,case-name,closed_captions&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}')
+        url += solr_hl
     if request.args.get('debug'):
         url += '&debugQuery=true'
     sort = request.args.get('sort')
@@ -400,7 +469,7 @@ def collection_autocomplete():
             found.append(line[:-1])
         elif found:
             break
-    return json.dumps(found)
+    return Response(json.dumps(found), mimetype='application/json')
 
 re_long_repeating_phrase = re.compile('(.{6}){4,}')
 def strip_long_repeating_phrase(s):
@@ -413,16 +482,27 @@ def fix_language(k, v):
 
 @app.route("/")
 def do_search():
+    valid_views = set(['search', 'grid', 'thumb_compare'])
+    view = request.args.get('view', 'search')
+    if view not in valid_views:
+        view = 'search'
+
     q = request.args.get('q')
+    facet_args = [(f, request.args[f]) for f in facet_fields if request.args.get(f)]
+
+    if len(request.args) > 1 and view=='grid' and not q:
+        if request.args.get('identifier'):
+            q = 'identifier:' + request.args['identifier']
+        else:
+            q = '*:*'
     if not q:
-        return render_template('search.html', lang_map=lang_map)
+        return render_template(view + '.html', lang_map=lang_map, changequery=changequery, zap_field=zap_field, field_set=field_set)
     q = q.strip()
 
     new_query_string = '&'.join(k + '=' + fix_language(k, v) for k, v in (i.split('=', 1) for i in request.query_string.split('&') if '=' in i) if v != '')
     if request.query_string != new_query_string:
         return redirect('?' + new_query_string)
 
-    facet_args = [(f, request.args[f]) for f in facet_fields if request.args.get(f)]
     facet_args_dict = dict(facet_args)
     page = int(request.args.get('page', 1))
     start = results_per_page * (page-1)
@@ -430,6 +510,8 @@ def do_search():
     fq = ''.join('&fq=' + quote('{!tag=%s}%s:"%s"' % (f, f, esc(request.args[f]))) for f in facet_fields if request.args.get(f))
     date_range = request.args.get('date_range')
     date_facet = request.args.get('date_facet')
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
     if date_range:
         m = re_date_range.match(date_range)
         if m:
@@ -437,12 +519,14 @@ def do_search():
             fq += '&fq=' + quote('date:[%s-01-01T00:00:00Z TO %s-01-01T00:00:00Z]' % (start_year, end_year))
     elif date_facet:
         fq += '&fq=' + quote('date:([%s-01-01T00:00:00Z TO %s-01-01T00:00:00Z+%dYEAR] NOT "%s-01-01T00:00:00Z+%dYEAR")' % (date_facet, date_facet, year_gap, date_facet, year_gap))
+    elif date_from and date_to:
+        fq += '&fq=' + quote('date:[%sT00:00:00Z TO %sT00:00:00Z]' % (date_from, date_to))
 
     url_facet_fields = ''.join('&facet.field='+('{!ex=' + f + '}' if f in facet_args_dict else '') + f for f in facet_fields)
 
     url_params = '&start=%d' % start + fq + url_facet_fields
     try:
-        search_results = search(q, url_params)
+        search_results = search(q, url_params, spellcheck=True)
     except SolrError as solr_error:
         return solr_error.value
     results = search_results['results']
@@ -455,7 +539,7 @@ def do_search():
     if results['response']['numFound'] == 0 and did_you_mean and 'nfpr' not in request.args:
         new_q = ''.join(i[1] for i in did_you_mean)
         try:
-            search_results = search(new_q, url_params)
+            search_results = search(new_q, url_params, spellcheck=False)
         except SolrError as solr_error:
             return solr_error.value
         alt_results = True
@@ -470,10 +554,6 @@ def do_search():
     results = search_results['results']
     t_solr += search_results['t_solr']
 
-    valid_views = set(['search', 'grid', 'thumb_compare'])
-    view = request.args.get('view', 'search')
-    if view not in valid_views:
-        view = 'search'
 
     for f in 'tv_original_year', 'year_from_date':
         try:
@@ -488,11 +568,12 @@ def do_search():
         get_movie_thumb=get_movie_thumb, year_gap=year_gap,
         find_item=find_item, enumerate=enumerate, len=len,
         pick_best=pick_best, url=url, facet_args_dict=facet_args_dict,
-        get_img_thumb = get_img_thumb, changequery=changequery,
+        get_img_thumb = get_img_thumb, changequery=changequery, zap_field=zap_field,
         token_hl=token_hl, t_solr=t_solr, collection_titles=collection_titles,
         did_you_mean=did_you_mean, alt_results=alt_results,
         fmt_licenseurl=fmt_licenseurl, add_thumbs_to_docs=add_thumbs_to_docs,
         strip_long_repeating_phrase=strip_long_repeating_phrase,
+        list_fields=list_fields, field_set=field_set,
         date_facet=(int(date_facet) if date_facet is not None else None))
     
 if __name__ == "__main__":

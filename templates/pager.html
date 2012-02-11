@@ -1,0 +1,17 @@
+Pages:
+
+{% if page != 1 %}
+    <a href="?{{changequery({'page':None})}}">&laquo;&nbsp;First</a>
+    <a href="?{{changequery({'page':page-1})}}">&lt;&nbsp;Previous</a>
+{% endif %}
+{% for p in pager.page_list %}
+    {% if p == page %}
+        <span class="this">{{p}}</span>
+    {% else %}
+        <a href="?{{changequery({'page':p})}}">{{p}}</a>
+    {% endif %}
+{% endfor %}
+{% if page < pager.pages %}
+    <a href="?{{changequery({'page':page+1})}}">Next&nbsp;&gt;</a>
+    <a href="?{{changequery({'page':pager.pages})}}">Last&nbsp;&raquo;</a>
+{% endif %}

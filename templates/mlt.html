@@ -17,7 +17,7 @@
 <table>
 {% for doc in mlt.response.docs %}
     {% set details = "http://www.archive.org/details/" + doc.identifier %}
-    <tr><td>
+    <tr><td>{{ doc.score }}</td><td>
     {% if doc.mediatype in mediatypes %}
         <img src="http://www.archive.org/images/mediatype_{{doc.mediatype|lower}}.gif">
     {% endif %}
@@ -33,6 +33,23 @@
     </td>
     <td>(<a href="{{url_for('view_mlt', identifier=doc.identifier)}}">more like this</a>)</td>
     </tr>
+    {% if doc.mediatype=='movies' %}
+        <tr><td colspan="2" valign="top">
+        {% set thumb = get_movie_thumb(doc.identifier) %}
+        {% if thumb %}
+            {% set thumbs = thumb.imgs if request.args.get('all_thumbs') else pick_best(thumb.imgs, num=4) %}
+            <div id="thumbs_{{identifier2}}">
+            {% for img in thumbs %}
+                <a href="{{details}}"><img src="{{thumb.url + img }}"></a>
+            {% endfor %}
+            </div>
+            {% if not request.args.get('all_thumbs') and len(thumb.imgs) > 4 %}
+                <span id="all_thumbs_{{ identifier2 }}"><a href="#" onclick="get_all_thumbs('{{ doc.identifier }}'); return false">show all thumbnails</a><br></span>
+            {% endif %}
+        {% endif %}
+        </td></tr>
+    {% endif %}
+
 {% endfor %}
 </table>
 

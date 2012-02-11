@@ -6,67 +6,179 @@
 {# Copyright(c)2012 Internet Archive. Software license GPL version 2. #}
 {# Written by Edward Betts <edward@archive.org> #}
 <style>
-body { font-family: serif; }
-em { background: yellow; font-style: normal; }
-span.selected { background: #ccc; padding: 2px; }
-
-table.dbq {
-  margin: 0px 32px 0px 0px;
-  border: 1px solid silver;
-  border-collapse: collapse;
-  border-top: 1px solid cornflowerblue;
-  font: 8pt sans-serif;
-}
-
-th.dbq { 
-  margin:0;
-  padding: 0px;
-  border: 1px solid #696969;
-  background: #e5e5e5;
-  text-align: center;
-}
-
-td.dbq  { 
-  margin: 0;
-  padding: 0px 2px;
-  border: 1px solid silver; 
-}
-
-td.dbqf { 
-  margin: 0;
-  padding: 2px 4px;
-  border: 1px solid silver;
-}
-
-tr.dbq:hover { 
-  background: khaki; 
-}
-
-.dbq a { text-decoration: none; }
-.dbq a:hover{ text-decoration: underline; }
 
 </style>
-<script language="javascript" type="text/javascript" src="/javascript/jquery/jquery.js"></script>
 
-<!--[if IE]><script language="javascript" type="text/javascript" src="/javascript/excanvas/excanvas.js"></script><![endif]-->
+<link href="{{url_for('static', filename='bootstrap/css/bootstrap.css')}}" rel="stylesheet">
 
-<script language="javascript" type="text/javascript" src="/javascript/flot/jquery.flot.js"></script>
+<style>
+body {
+    padding-top: 60px; /* 60px to make the container go all the way to the bottom of the topbar */
+}
+
+input.filterbox {
+    width:  100%;
+}
+.nowrap { white-space: nowrap; }
+th { white-space: nowrap; }
+
+</style>
+
+<link href="{{url_for('static', filename='bootstrap/css/bootstrap-responsive.css')}}" rel="stylesheet">
 
 </head>
 <body>
-<h1>Search</h1>
-<form><input name="q" value="{{q or ''}}" size="60">
-<input type="submit" value="Search">
-</form>
 
-<table>
-{% for doc in results.response.docs %}
+    {% set mediatype_icons = {
+        'texts': 'book',
+        'movies': 'film',
+        'audio':'headphones', 
+        'image': 'picture', 
+        'etree': 'music', 
+        'software':'cog',
+        'data': 'file',
+        'collection': 'list',
+        'other': 'asterisk',
+        'education': 'pencil',
+    } %}
+
+
+<div class="navbar navbar-fixed-top">
+    <div class="navbar-inner">
+    <div class="container">
+        <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        </a>
+        <a class="brand" href="{{ url_for('do_search')}}">Internet Archive</a>
+        <div class="nav-collapse">
+        <ul class="nav">
+            <li><a href="?{{changequery({'view':None})}}">Search</a></li>
+            <li class="active"><a href="?{{changequery({})}}">Grid</a></li>
+        </ul>
+        <form class="navbar-search pull-right">
+            <input type="text" name="q" class="search-query" placeholder="Search">
+        </form>
+        </div><!--/.nav-collapse -->
+    </div>
+    </div>
+</div>
+
+<div class="container-fluid">
+
+{% if request.args.fields %}
+    {% set fields = request.args.fields.split(',') %}
+{% elif request.args.field_set %}
+    {% set fields = field_set[request.args.field_set] %}
+{% else %}
+    {% set fields = field_set['default'] %}
+{% endif %}
+
+
+    <div class="modal fade" id="myModal">
+    <div class="modal-header">&nbsp;<a class="close" data-dismiss="modal">&times;</a>
+    <h3>Visible fields</h3>
+    </div>
+    <div class="modal-body">
+    <p>One fine body…</p>
+    </div>
+    <div class="modal-footer">
+    <a href="#" class="btn btn-primary">Save changes</a>
+    <a href="#" class="btn" data-dismiss="modal">Close</a>
+    </div>
+    </div>
+
+{% if results %}
+
+        {% set field_sets = [(None, None, 'Default'), ('tv', 'film', 'TV'), ('books', 'book', 'Books'), ('software', 'cog', 'Software')] %}
+
+        fields:
+        <ul class="nav nav-pills">
+        {% for field_set, icon, label in field_sets %}
+            {% if (field_set == None and not request.args.field_set and not request.args.fields) or  request.args.field_set == field_set %}
+                <li class="active">
+            {% else %}
+                <li>
+            {% endif %}
+            <a href="?{{changequery({'fields': None, 'field_set': field_set})}}">{% if icon %}<i class="icon-{{icon}}">{% endif %}</i>{{ label }}</a></li>
+        {% endfor %}
+        <li><a data-toggle="modal" href="#myModal">select</a></li>
+        </ul>
+
+        {{ comma(results.response.numFound) }} items found &nbsp;&nbsp;
+{% endif %}
+
+<form>
+
+<input type="hidden" name="view" value="grid">
+<input type="hidden" name="fields" value="{{ request.args.fields }}">
+<input type="hidden" name="field_set" value="{{ request.args.field_set }}">
+
+<table class="table table-striped table-bordered table-condensed draggable">
 <tr>
-<td class="dbq"><a href="http://www.archive.org/details/{{ doc.identifier }}">{{ doc.identifier }}</a></td>
-<td class="dbq">{{ doc.title.replace(' ', '&nbsp;') | safe}}</td>
+<td>
+</td>
+{% for f in fields %}
+<th>{{ f if f != 'date_str' else 'date' }} <a href="?{{zap_field(fields, f)}}">&times;</a></th>
+{% endfor %}
+</tr>
+<tr>
+<td><input type="submit" value="Search" class="btn-primary"></td>
+{% for f in fields %}
+<td><input class="filterbox" name="{{f}}" value="{{ request.args.get(f, '')}}"></td>
+{% endfor %}
+</tr>
+{% for doc in (results.response.docs if results else []) %}
+<tr>
+<td>
+{% if doc.noindex %}<span class="label label-warning">noindex</span>{% endif %}
+</td>
+{% for f in fields %}
+<td class="dbq">
+    {% if f == 'identifier' %}
+        <a href="http://www.archive.org/details/{{ doc.identifier }}" class="nowrap">{{ doc.identifier }}</a></td>
+    {% elif f == 'mediatype' %}
+        {% if doc.mediatype in mediatype_icons %}<i class="icon-{{mediatype_icons[doc.mediatype]}}"></i>{% endif %}
+        {{ doc.mediatype }}
+    {% elif f == 'title' %}
+        {% set title = doc.title %}
+        {% if len(doc.title) > 50 %}
+        <span title="{{ title }}">{{ title | truncate(length=50) }}</span>
+        {% else %}
+        {{ title | safe}}
+        {% endif %}
+    {% elif f in list_fields %}
+        {% for v in doc.get(f, []) %}{{v}}{% if not loop.last %}; {% endif %}{% endfor %}
+    {% else %}
+        {{ doc.get(f, '') }}
+    {% endif %}
+</td>
+{% endfor %}
 </tr>
 {% endfor %}
 </table>
+</form>
+
+{% if results %}
+{% include 'pager.html' %}
+{% endif %}
+
+     <hr>
+
+      <footer>
+        <p>Internet Archive</p>
+
+      </footer>
+
+    </div> <!-- /container -->
+
+    <script src="{{url_for('static', filename='js/dragtable.js')}}"></script>
+    <script language="javascript" type="text/javascript" src="http://edward.openlibrary.org/javascript/jquery/jquery.js"></script>
+    {% for plugin in ['modal', 'transition', 'tooltip', 'popover'] %}
+    <script src="{{url_for('static', filename='bootstrap/js/bootstrap-' + plugin + '.js')}}"></script>
+    {% endfor %}
 
 </body>
 </html>
