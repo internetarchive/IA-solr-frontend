@@ -31,7 +31,7 @@
         {% endfor %}
     {% endif %}
     </td>
-    <td>(<a href="{{url_for('view_mlt', identifier=doc.identifier)}}">more like this</a>)</td>
+    <td>(<a href="{{url_for('mlt_page', identifier=doc.identifier)}}">more like this</a>)</td>
     </tr>
     {% if doc.mediatype=='movies' %}
         <tr><td colspan="2" valign="top">
