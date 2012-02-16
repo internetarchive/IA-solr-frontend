@@ -153,27 +153,6 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
 <input type="hidden" name="fields" value="{{ request.args.fields }}">
 <input type="hidden" name="field_set" value="{{ request.args.field_set }}">
 
-{% if results %}
-{% for f in fields if f in results.facet_counts.facet_fields or f + '_facet' in results.facet_counts.facet_fields %}
-    <div class="modal fade" id="hist_{{ f }}">
-        <div class="modal-header">
-            <a href="#" class="close" data-dismiss="modal">&times;</a>
-            <h3>{{ f }}</h3>
-        </div>
-        <div class="modal-body">
-            <table class="table table-striped table-bordered table-condensed">
-            {% for k, v in results.facet_counts.facet_fields[f] or results.facet_counts.facet_fields[f + '_facet'] %}
-            <tr><td>{{ k }}</td><td>{{ v }}</td></tr>
-            {% endfor %}
-            </table>
-        </div>
-        <div class="modal-footer">
-            <a href="#" class="btn btn-primary" data-dismiss="modal">Close</a>
-        </div>
-    </div>
-{% endfor %}
-{% endif %}
-
 <table class="table table-striped table-bordered table-condensed draggable">
 {% if facet_row %}
 <tr>
@@ -215,7 +194,7 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
     {% endif %}
 {% endif %}
 {% if results and (f in results.facet_counts.facet_fields or f + '_facet' in results.facet_counts.facet_fields) %}
-<a data-toggle="modal" href="#hist_{{ f }}"><img src="http://www.us.archive.org/images/histogram-icon.gif"></a>
+<a href="{{ url_for('facet_page', field=f) }}?{{changequery({})}}"><img src="http://www.us.archive.org/images/histogram-icon.gif"></a>
 {% endif %}
 </th>
 {% endfor %}

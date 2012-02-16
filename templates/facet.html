@@ -1,0 +1,42 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<title>{{ field }}) - Internet Archive</title>
+{# Copyright(c)2012 Internet Archive. Software license GPL version 2. #}
+{# Written by Edward Betts <edward@archive.org> #}
+<style>.num { text-align: right; }</style>
+
+</head>
+<body>
+
+<div class="container-fluid">
+<h1>{{ field }}</h1>
+
+<a href="{{ url_for('grid_page') + '?' + changequery({}) }}">Back to grid page</a><p>
+
+{% if counts %}
+
+    Query: 
+    {% for k,v in search_fields %}
+    {{ k }}={{v}}{% if not loop.last %}, {% endif %}
+    {% endfor %}<br>
+
+    <table>
+    {% for value, count in counts %}
+    <tr><td><a href="{{ url_for('grid_page') + '?' + add_to_field(field, solr_esc(value)) }}">{{ value }}</a></td><td>{{ count }}</td></tr>
+    {% endfor %}
+    </table>
+
+    <p>Time taken: {{ '%.2f' | format(t_solr) }} seconds.<p>
+
+{% else %}
+
+    Can't facet on {{ field }}
+
+{% endif %}
+
+</div>
+
+</body>
+</html>

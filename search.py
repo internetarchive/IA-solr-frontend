@@ -48,7 +48,8 @@ facet_fields = ['noindex', 'mediatype', 'collection_facet', 'language_facet',
     'creator_facet', 'subject_facet', 'publisher_facet', 'licenseurl',
     'possible-copyright-status', 'rating_facet', 'sponsor_facet',
     'handwritten', 'tv_channel', 'tv_category', 'tv_program', 
-    'tv_episode_name', 'tv_original_year', 'tv_starring', ]
+    'tv_episode_name', 'tv_original_year', 'tv_starring',
+    'court', ]
     # 'tuner', 'aspect_ratio', 'frames_per_second', 'audio_codec', 'video_codec', 'camera' ]
 
 fl = ['identifier', 'creator', 'title', 'date', 'subject', 'collection',
@@ -85,11 +86,11 @@ field_set = {
     'default': ['identifier', 'mediatype', 'title', 'date_str', 'collection',
         'downloads', 'item_size', 'item_file_format', 'uploader'],
     'all': ['identifier', 'mediatype', 'title', 'creator', 'date_str',
-        'collection', 'downloads', 'item_size', 'item_file_format',
+        'collection', 'downloads', 'item_size', 'item_file_format', 'uploader',
         'publisher', 'language', 'scanningcenter', 'subject', 'sponsor',
         'boxid', 'isbn', 'oclc-id', 'lccn', 'imagecount', 'foldoutcount',
         'repub_state', 'ppi', 'scandate', 'addeddate', 'publicdate',
-        'sponsordate', 'contributor', 'uploader', 'scanner', 'operator',
+        'sponsordate', 'contributor', 'scanner', 'operator',
         'case-name', 'court', 'date-case-filed', 'date-case-terminated',
         'docket-num', 'pacer-case-num', 'handwritten', 'source', 'tuner',
         'rating', 'tv_channel', 'tv_category', 'tv_program', 'tv_episode_name',
@@ -362,6 +363,14 @@ def get_movie_thumb(identifier):
     }
 
 re_thumb_link = re.compile('<a href="(.+thumb.*)">')
+
+def add_to_field(field, value):
+    args = dict((k, v) for k, v in request.args.items() if v)
+    if field in args:
+        args[field] += ' ' + value
+    else:
+        args[field] = ' ' + value
+    return '&'.join('%s=%s' % (k, quote(v)) for k, v in args.items())
 
 def changequery(new_args):
     args = dict((k, v) for k, v in request.args.items() if v and k not in new_args)
@@ -665,19 +674,37 @@ def collection_page(collection):
             title=title, comma=comma, fmt_filesize=fmt_filesize, results=data,
             t_solr=t_solr)
 
+@app.route("/fields")
+def select_fields_page():
+    return render_template('select_fields.html',
+        default_fields=field_set['default'],
+        all_fields=field_set['all']
+    )
+
 @app.route("/facet/<field>")
 def facet_page(field):
+    field = field.lower()
+    if field in facet_fields:
+        facet_field = field
+    elif field + '_facet' in facet_fields:
+        facet_field = field + '_facet'
+    else:
+        return render_template('facet.html', field=field, changequery=changequery)
     rows = 0
-    fq = ''.join('&fq=' + quote('%s:(%s)' % grid_field(f)) for f in all_fields if request.args.get(f))
+    search_fields = [grid_field(f) for f in all_fields if request.args.get(f)]
+    fq = ''.join('&fq=' + quote('%s:(%s)' % i) for i in search_fields)
     q = '*:*'
-    url_params = '&facet=true&facet.mincount=1&facet.limit=-1&facet.sort=count' 
-    url_params += '&facet.field=' + field
+    url_params = fq
+    url_params += '&facet=true&facet.mincount=1&facet.limit=-1&facet.sort=count' 
+    url_params += '&facet.field=' + facet_field
     url_params += ''.join('&f.' + f + '.facet.method=enum' for f in facet_enum_fields)
 
     search_results = search(q, url_params, spellcheck=False, rows=rows)
+    results = search_results['results']
     return render_template('facet.html', field=field,
-        counts=search_results['results']['facet_counts']['facet_fields'][field],
-        t_solr=search_results['t_solr'],
+        counts=results['facet_counts']['facet_fields'][facet_field],
+        t_solr=search_results['t_solr'], changequery=changequery,
+        add_to_field=add_to_field, solr_esc=esc, search_fields=search_fields
     )
 
 @app.route("/grid")
