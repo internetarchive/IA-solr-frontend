@@ -69,11 +69,11 @@ function hide_filter(filter) {
         <span class="icon-bar"></span>
         <span class="icon-bar"></span>
         </a>
-        <a class="brand" href="{{ url_for('do_search')}}">Internet Archive</a>
+        <a class="brand" href="{{ url_for('search_page')}}">Internet Archive</a>
         <div class="nav-collapse">
         <ul class="nav">
-            <li class="active"><a href="?{{changequery({})}}">Search</a></li>
-            <li><a href="?{{changequery({'view': 'grid'})}}">Grid</a></li>
+            <li class="active"><a href="{{ url_for('search_page') + '?' + changequery({})}}">Search</a></li>
+            <li><a href="{{url_for('grid_page') + '?' + changequery({}) }}">Grid</a></li>
         </ul>
         <form class="navbar-search pull-right">
             <input type="text" name="q" class="search-query" placeholder="Search">
@@ -101,16 +101,16 @@ function hide_filter(filter) {
 {%- macro facet_label(facet_heading, value) -%}
     {% if facet_heading == 'noindex' %}
         {% if value.lower() != 'true' %}
-        <i class="icon-eye-open"></i>Public
+        Public
         {% else %}
-        <i class="icon-ban-circle"></i>Private (noindex)
+        Private (noindex)
         {% endif %}
     {% elif facet_heading == 'licenseurl' %}
         {{ fmt_licenseurl(value) }}
     {% elif facet_heading == 'mediatype' %}
-        {% if value in mediatype_icons %}<i class="icon-{{ mediatype_icons[value] }}"></i>{% endif %}{{ value }}
-    {% elif facet_heading == 'collection' and value in collection_titles %}
-        {{ collection_titles[value] |truncate(48) }}
+        {% if value == 'web' %}<img src="{{url_for('static', filename='img/globe.png')}}">{% elif value in mediatype_icons %}<i class="icon-{{ mediatype_icons[value] }}"></i>{% endif %}{{ value }}
+    {% elif facet_heading == 'collection_facet' and value in collections %}
+        {{ collections[value]['title'] |truncate(48) }}
     {% elif facet_heading == 'language_facet' and value.lower() in lang_map %}
         {{ lang_map[value.lower()] }}
     {% else %}
@@ -369,6 +369,8 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
             {% endif %}
 
             {% if doc.noindex %}<span class="label label-warning">noindex</span>{% endif %}
+            {% if doc.get('access-restricted') %}<span class="label label-warning">restricted</span>{% endif %}
+            {#{% if doc.part_of_hidden_collection %}<span class="label label-warning">hidden</span>{% endif %}#}
             </td>
 
             {% if doc.mediatype=='movies' %}
@@ -376,7 +378,7 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
             {% else %}
                 <td valign="top" rowspan="2" align="right">
                     {% if doc.mediatype == 'texts' and doc.scanner %}
-                        <a href="{{details}}"><img class="thumb" src="http://www.archive.org/download/{{ doc.identifier }}/page/{{doc.identifier}}_cover_h100.jpg" height="150"></a>
+                        <a href="{{details}}"><img class="thumb" src="http://www.archive.org/download/{{ doc.identifier }}/page/{{doc.identifier}}_cover_h150.jpg" height="150"></a>
                     {% elif doc.item_filename %}
                         {% for f in doc.item_filename if f.endswith('thumb.jpg') %}
                             <a href="{{details}}"><img class="thumb" src="http://www.archive.org/download/{{ doc.identifier }}/{{f}}"></a>
@@ -423,7 +425,7 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
         {% if doc.imagecount %}<b>Images</b>: {{doc.imagecount }}{% endif %}
         {% if doc.downloads %}<b>Downloads</b>: {{doc.downloads }}{% endif %}
         {% if doc.foldoutcount %}<b>Foldouts</b>: {{doc.foldoutcount }}{% endif %}
-        (<a href="{{url_for('view_mlt', identifier=doc.identifier)}}">more like this</a>)
+        (<a href="{{url_for('mlt_page', identifier=doc.identifier)}}">more like this</a>)
         <br>
         {% if doc.language_facet %}<b>Language</b>:
             {% for l in doc.language_facet %}
@@ -448,7 +450,7 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
         {% endif %}
         {% if doc.collection %}<b>Collections</b>: 
             {% for c in doc.collection %}
-                <a href="?{{changequery({'page':None,'collection':c})}}">{{collection_titles.get(c, c) }}</a>{% if not loop.last %}; {% endif %}
+                <a href="?{{changequery({'page':None,'collection':c})}}">{{collections[c].title if collections.get(c) else c }}</a>{% if not loop.last %}; {% endif %}
             {% endfor %}
             <br>
         {% endif %}
