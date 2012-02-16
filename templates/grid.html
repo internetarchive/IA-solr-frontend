@@ -5,9 +5,7 @@
 <title>{% if q %}{{ q + ' - ' }}{% endif %}Internet Archive search</title>
 {# Copyright(c)2012 Internet Archive. Software license GPL version 2. #}
 {# Written by Edward Betts <edward@archive.org> #}
-<style>
-
-</style>
+<script language="javascript" type="text/javascript" src="http://edward.openlibrary.org/javascript/jquery/jquery.js"></script>
 
 <link href="{{url_for('static', filename='bootstrap/css/bootstrap.css')}}" rel="stylesheet">
 
@@ -21,6 +19,18 @@ input.filterbox {
 }
 .nowrap { white-space: nowrap; }
 th { white-space: nowrap; }
+
+img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
+
+.selected { 
+  padding: 2px;
+  margin: 2px;
+  -webkit-border-radius: 5px;
+  -moz-border-radius: 5px;
+  border-radius: 5px;
+  color: #ffffff;
+  background-color: #0088cc;
+}
 
 </style>
 
@@ -52,11 +62,11 @@ th { white-space: nowrap; }
         <span class="icon-bar"></span>
         <span class="icon-bar"></span>
         </a>
-        <a class="brand" href="{{ url_for('do_search')}}">Internet Archive</a>
+        <a class="brand" href="{{ url_for('search_page')}}">Internet Archive</a>
         <div class="nav-collapse">
         <ul class="nav">
-            <li><a href="?{{changequery({'view':None})}}">Search</a></li>
-            <li class="active"><a href="?{{changequery({})}}">Grid</a></li>
+            <li><a href="{{ url_for('search_page') + '?' + changequery({'view':None})}}">Search</a></li>
+            <li class="active"><a href="{{ url_for('grid_page') + '?' + changequery({})}}">Grid</a></li>
         </ul>
         <form class="navbar-search pull-right">
             <input type="text" name="q" class="search-query" placeholder="Search">
@@ -68,91 +78,234 @@ th { white-space: nowrap; }
 
 <div class="container-fluid">
 
-{% if request.args.fields %}
-    {% set fields = request.args.fields.split(',') %}
-{% elif request.args.field_set %}
-    {% set fields = field_set[request.args.field_set] %}
-{% else %}
-    {% set fields = field_set['default'] %}
-{% endif %}
-
-
     <div class="modal fade" id="myModal">
-    <div class="modal-header">&nbsp;<a class="close" data-dismiss="modal">&times;</a>
-    <h3>Visible fields</h3>
+        <div class="modal-header">&nbsp;<a class="close" data-dismiss="modal">&times;</a>
+            <h3>Visible fields</h3>
+        </div>
+        <div class="modal-body">
+        <form>
+        <table>
+        {% for f in field_set['all'] %}
+            <tr><td><input type="checkbox"> {{ f }}</td></tr>
+        {% endfor %}
+        </table>
+        </form>
+        </div>
+        <div class="modal-footer">
+            <a href="#" class="btn btn-primary">Save changes</a>
+            <a href="#" class="btn" data-dismiss="modal">Close</a>
+        </div>
     </div>
-    <div class="modal-body">
-    <p>One fine body…</p>
-    </div>
-    <div class="modal-footer">
-    <a href="#" class="btn btn-primary">Save changes</a>
-    <a href="#" class="btn" data-dismiss="modal">Close</a>
-    </div>
-    </div>
+
+    {% set field_sets = [
+        (None, None, 'Default'),
+        ('all', 'asterisk', 'All'), 
+        ('collection', None, 'Collections'), 
+        ('tv', 'film', 'TV'),
+        ('books', 'book', 'Books'), 
+        ('etree', 'music', 'etree'),
+        ('software', 'cog', 'Software'),
+        ('usfederalcourts', None, 'Court docs'),
+        ('nasa', None, 'NASA'),
+        ('librivox', None, 'Librivox')]
+    %}
+
+    fields:
+    <ul class="nav nav-pills">
+    {% for field_set, icon, label in field_sets %}
+        {% if (field_set == None and not request.args.field_set and not request.args.fields) or  request.args.field_set == field_set %}
+            <li class="active">
+        {% else %}
+            <li>
+        {% endif %}
+        <a href="?{{changequery({'extra': None, 'fields': None, 'field_set': field_set})}}">{% if icon %}<i class="icon-{{icon}}">{% endif %}</i>{{ label }}</a></li>
+    {% endfor %}
+    <li class="dropdown" id="menu1">
+        <a class="dropdown-toggle" data-toggle="dropdown" href="#menu1">
+        Add <b class="caret"></b></a>
+        <ul class="dropdown-menu">
+            {% for f in field_set.all if f not in fields %}
+            <li><a href="?{{changequery({'extra': ','.join(extra + [f])})}}">{{ f }}</a></li>
+            {% endfor %}
+        </ul>
+    </li>
+    <li><a data-toggle="modal" href="#myModal">select</a></li>
+    </ul>
+
+    rows: 
+    <ul class="nav nav-pills">
+    {% for row_count in [10, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000] %}
+        {% if row_count == rows %}<li class="active">{% else %}<li>{% endif %}
+        <a href="?{{changequery({'rows': row_count })}}">{{ row_count }}</a></li>
+    {% endfor %}
+    </ul>
+
 
 {% if results %}
 
-        {% set field_sets = [(None, None, 'Default'), ('tv', 'film', 'TV'), ('books', 'book', 'Books'), ('software', 'cog', 'Software')] %}
-
-        fields:
-        <ul class="nav nav-pills">
-        {% for field_set, icon, label in field_sets %}
-            {% if (field_set == None and not request.args.field_set and not request.args.fields) or  request.args.field_set == field_set %}
-                <li class="active">
-            {% else %}
-                <li>
-            {% endif %}
-            <a href="?{{changequery({'fields': None, 'field_set': field_set})}}">{% if icon %}<i class="icon-{{icon}}">{% endif %}</i>{{ label }}</a></li>
-        {% endfor %}
-        <li><a data-toggle="modal" href="#myModal">select</a></li>
-        </ul>
-
-        {{ comma(results.response.numFound) }} items found &nbsp;&nbsp;
+        {{ comma(results.response.numFound) }} items found
+        in {{ '%.4f' | format(t_solr) }} seconds<p>
 {% endif %}
 
-<form>
+<form action="{{url_for('grid_page')}}" method="get">
 
-<input type="hidden" name="view" value="grid">
+<input type="hidden" name="sort" value="{{ request.args.sort }}">
 <input type="hidden" name="fields" value="{{ request.args.fields }}">
 <input type="hidden" name="field_set" value="{{ request.args.field_set }}">
 
+{% if results %}
+{% for f in fields if f in results.facet_counts.facet_fields or f + '_facet' in results.facet_counts.facet_fields %}
+    <div class="modal fade" id="hist_{{ f }}">
+        <div class="modal-header">
+            <a href="#" class="close" data-dismiss="modal">&times;</a>
+            <h3>{{ f }}</h3>
+        </div>
+        <div class="modal-body">
+            <table class="table table-striped table-bordered table-condensed">
+            {% for k, v in results.facet_counts.facet_fields[f] or results.facet_counts.facet_fields[f + '_facet'] %}
+            <tr><td>{{ k }}</td><td>{{ v }}</td></tr>
+            {% endfor %}
+            </table>
+        </div>
+        <div class="modal-footer">
+            <a href="#" class="btn btn-primary" data-dismiss="modal">Close</a>
+        </div>
+    </div>
+{% endfor %}
+{% endif %}
+
 <table class="table table-striped table-bordered table-condensed draggable">
+{% if facet_row %}
 <tr>
-<td>
-</td>
+<td></td>
 {% for f in fields %}
-<th>{{ f if f != 'date_str' else 'date' }} <a href="?{{zap_field(fields, f)}}">&times;</a></th>
+{% if f in results.facet_counts.facet_fields %}
+    {% set facet_field = f %}
+{% elif  f + '_facet' in results.facet_counts.facet_fields %}
+    {% set facet_field = f + '_facet' %}
+{% else %}
+    {% set facet_field = None %}
+{% endif %}
+<td style="vertical-align: bottom">
+{% if facet_field %}
+    <table>
+    {% for k, v in results.facet_counts.facet_fields[facet_field] | reverse %}
+    <tr><td>{{ k }}</td><td>{{ v }}</td></tr>
+    {% endfor %}
+    </table>
+{% endif %}
+</td>
+{% endfor %}
+</tr>
+{% endif %}
+<tr>
+<td></td>
+{% for f in fields %}
+<th>{{ f if f != 'date_str' else 'date' }}{% if f != 'identifier' %} <a href="?{{zap_field(fields, f)}}">&times;</a>{% endif %}
+{% if f in single_value_fields %}
+    <strong>
+    {% set sort = request.args.sort %}
+    {% if sort == f + ' desc'%}<span class="selected">&#x2b06;</span>{% else %}
+    <a href="?{{changequery({'page': None, 'sort': f + ' desc'})}}">&#x2b06;</a>
+    {% endif %}
+
+    {% if sort == f + ' asc'%}<span class="selected">&#x2b07;</span>{% else %}
+    <a href="?{{changequery({'page': None, 'sort': f + ' asc'})}}">&#x2b07;</a>
+    </strong>
+    {% endif %}
+{% endif %}
+{% if results and (f in results.facet_counts.facet_fields or f + '_facet' in results.facet_counts.facet_fields) %}
+<a data-toggle="modal" href="#hist_{{ f }}"><img src="http://www.us.archive.org/images/histogram-icon.gif"></a>
+{% endif %}
+</th>
 {% endfor %}
 </tr>
 <tr>
 <td><input type="submit" value="Search" class="btn-primary"></td>
 {% for f in fields %}
-<td><input class="filterbox" name="{{f}}" value="{{ request.args.get(f, '')}}"></td>
+{% set f_name = f if f != 'date_str' else 'date' %}
+<td><input class="filterbox" name="{{ f_name }}" value="{{ request.args.get(f_name, '')}}"></td>
 {% endfor %}
 </tr>
 {% for doc in (results.response.docs if results else []) %}
+{% set details = "http://www.archive.org/details/" + doc.identifier %}
 <tr>
 <td>
-{% if doc.noindex %}<span class="label label-warning">noindex</span>{% endif %}
+{% if doc.thumb_path %}
+    <a href="{{ details }}"><img class="thumb" src="http://www.archive.org/download/{{ doc.identifier }}/{{ doc.thumb_path }}"></a>
+{% endif %}
 </td>
 {% for f in fields %}
-<td class="dbq">
+<td>
     {% if f == 'identifier' %}
-        <a href="http://www.archive.org/details/{{ doc.identifier }}" class="nowrap">{{ doc.identifier }}</a></td>
+        {% if 'tvarchive' in doc.collection %}<span class="nowrap">{% endif %}
+        <a href="{{ details }}" class="nowrap">{{ doc.identifier }}</a>
+        {% if doc.thumb_path and (doc.noindex or doc.get('access-restricted')) %}<br>{% endif %}
+        {% if doc.noindex %}<span class="label label-warning">noindex</span>{% endif %}
+        {% if doc.get('access-restricted') %}<span class="label label-warning">restricted</span>{% endif %}
+        {% if 'tvarchive' in doc.collection %}</span>{% endif %}
+</td>
     {% elif f == 'mediatype' %}
-        {% if doc.mediatype in mediatype_icons %}<i class="icon-{{mediatype_icons[doc.mediatype]}}"></i>{% endif %}
-        {{ doc.mediatype }}
+        {% if doc.mediatype %}
+            {% if doc.mediatype in mediatype_icons %}<i class="icon-{{mediatype_icons[doc.mediatype]}}"></i>{% endif %}
+            {{ doc.mediatype }}
+            {% set v = doc.mediatype %}
+            <span class="nowrap"><a href="?{{changequery({f: request.args.get(f, '') + '"%s"' % solr_esc(v)})}}"><i class="icon-plus-sign" alt="+"></i></a><a href="?{{changequery({f: request.args.get(f, '') + '-"%s"' % solr_esc(v)})}}"><i class="icon-minus-sign" alt="-"></i></a></span>
+        {% else %}
+            <span class="label label-important">missing</span>
+        {% endif %}
     {% elif f == 'title' %}
         {% set title = doc.title %}
-        {% if len(doc.title) > 50 %}
-        <span title="{{ title }}">{{ title | truncate(length=50) }}</span>
+        {% if len(doc.title) < 50 %}
+            <span class="nowrap">{{ title }}</span>
+        {% elif len(doc.title) > 80 %}
+            <span title="{{ title }}">{{ title | truncate(length=80) }}</span>
         {% else %}
-        {{ title | safe}}
+            {{ title }}
         {% endif %}
-    {% elif f in list_fields %}
-        {% for v in doc.get(f, []) %}{{v}}{% if not loop.last %}; {% endif %}{% endfor %}
-    {% else %}
-        {{ doc.get(f, '') }}
+    {% elif f.startswith('description') and 'tvarchive' in doc.collection %}
+        <span class="nowrap">{{ doc[f] }}</span>
+    {% elif f == 'item_size' %}
+        {% if f in doc %}
+            {{ fmt_filesize(doc[f]) }}
+        {% endif %}
+    {% elif f not in single_value_fields %}
+        {% set values = doc.get(f, []) %}
+        {% set nowrap_field = False %}
+        {% if len(''.join(values)) < 50 %}
+            {% set nowrap_field = True %}
+            <span class="nowrap">
+        {% endif %}
+        {% for v in values %}
+            {% if nowrap_field %}
+                {{v}}
+            {% elif len(v) < 40 %}
+                <span class="nowrap">{{v}}
+            {% else %}
+                {{v}} <span class="nowrap">
+            {% endif %}
+<a href="?{{changequery({f: request.args.get(f, '') + '"%s"' % solr_esc(v)})}}"><i class="icon-plus-sign" alt="+"></i></a><a href="?{{changequery({f: request.args.get(f, '') + '-"%s"' % solr_esc(v)})}}"><i class="icon-minus-sign" alt="-"></i></a>
+            {% if not nowrap_field %}
+                </span>
+            {% endif %}
+        {% endfor %}
+        {% if nowrap_field %}
+            </span>
+        {% endif %}
+    {% elif f in ('publisher', 'scanningcenter') %}
+        {% set v = doc.get(f) %}
+        {% if v %}
+        {{ v }}
+        <span class="nowrap"><a href="?{{changequery({f: request.args.get(f, '') + '"%s"' % v})}}"><i class="icon-plus-sign" alt="+"></i></a><a href="?{{changequery({f: request.args.get(f, '') + '-"%s"' % v})}}"><i class="icon-minus-sign" alt="-"></i></a></span>
+        {% endif %}
+    {% elif f == 'downloads' %}
+        {{ comma(doc.get(f, 0)) }}
+    {% elif doc.get(f) %}
+        {% if isinstance(doc[f], basestring) and len(doc[f]) < 60 %}
+            <span class="nowrap">{{ doc[f] }}</span>
+        {% else %}
+            {{ doc[f] }}
+        {% endif %}
     {% endif %}
 </td>
 {% endfor %}
@@ -175,8 +328,7 @@ th { white-space: nowrap; }
     </div> <!-- /container -->
 
     <script src="{{url_for('static', filename='js/dragtable.js')}}"></script>
-    <script language="javascript" type="text/javascript" src="http://edward.openlibrary.org/javascript/jquery/jquery.js"></script>
-    {% for plugin in ['modal', 'transition', 'tooltip', 'popover'] %}
+    {% for plugin in ['modal', 'transition', 'tooltip', 'popover', 'dropdown'] %}
     <script src="{{url_for('static', filename='bootstrap/js/bootstrap-' + plugin + '.js')}}"></script>
     {% endfor %}
 

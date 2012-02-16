@@ -1,9 +1,13 @@
-from flask import Flask, render_template, request, redirect, Response
+from flask import Flask, render_template, request, redirect, Response, make_response, url_for
 from urllib import urlopen, quote_plus
-import json, locale, sys, re
+from pprint import pprint, pformat
+import json, locale, sys, re, resource
 
 from socket import socket, AF_INET, SOCK_DGRAM, SOL_UDP, SO_BROADCAST, timeout
 from time import time
+
+#megs = 200
+#resource.setrlimit(resource.RLIMIT_AS, (megs * 1048576L, -1L))
 
 # Copyright(c)2012 Internet Archive. Software license GPL version 2.
 # Written by Edward Betts <edward@archive.org>
@@ -40,10 +44,10 @@ def find_item(ia):
             return (ia_host, ia_path)
     raise FindItemError
 
-facet_fields = ['noindex', 'mediatype', 'collection', 'language_facet',
+facet_fields = ['noindex', 'mediatype', 'collection_facet', 'language_facet',
     'creator_facet', 'subject_facet', 'publisher_facet', 'licenseurl',
     'possible-copyright-status', 'rating_facet', 'sponsor_facet',
-    'handwritten', 'source', 'tv_channel', 'tv_category', 'tv_program', 
+    'handwritten', 'tv_channel', 'tv_category', 'tv_program', 
     'tv_episode_name', 'tv_original_year', 'tv_starring', ]
     # 'tuner', 'aspect_ratio', 'frames_per_second', 'audio_codec', 'video_codec', 'camera' ]
 
@@ -52,35 +56,85 @@ fl = ['identifier', 'creator', 'title', 'date', 'subject', 'collection',
     'rating', 'sponsor', 'imagecount', 'foldoutcount', 'downloads', 'date_str',
     'language', 'language_facet', 'item_filename']
 
-list_fields = set(['collection', 'tv_starring', 'creator', 'language', 'subject', 'contributor', 'uploader'])
+list_fields = set(['collection', 'tv_starring', 'creator', 'language',
+    'subject', 'contributor', 'uploader', 'boxid', 'isbn', 'oclc-id', 'lccn',
+    'venue', 'coverage', 'transferer', 'updater'])
+
+single_value_fields = set(['identifier', 'title', 'date', 'date_str',
+    'scanner', 'mediatype', 'description', 'noindex',
+    'foldoutcount', 'downloads', 'imagecount', 'publisher', 'sponsor',
+    'mediatype', 'ppi', 'repub_state', 'item_size', 'handwritten',
+    'operator', 'copyright-evidence-operator', 'scanningcenter',
+    'possible-copyright-status', 'copyright-evidence', 'copyright-region',
+    'licenseurl', 'source', 'tuner', 'previous_item', 'next_item', 'video_codec',
+    'audio_codec', 'sample', 'frames_per_second', 'start_localtime',
+    'start_time', 'stop_time', 'utf_offset', 'runtime', 'aspect_ratio',
+    'scanfee', 'tv_channel', 'tv_category', 'tv_program', 'tv_episode_name',
+    'tv_original_year', 'identifier-access', 'identifier-ark', 'venue',
+    'coverage', 'transferer', 'addeddate', 'publicdate', 'sponsordate',
+    'scandate', 'closed_captioning', 'nav_order', 'num_recent_reviews',
+    'num_top_dl', 'spotlight_identifier', 'num_top_ba', 'shiptracking',
+    'show_browse_title_link', 'show_browse_author_link',
+    'rating', 'court', 'case-name', 'date-case-filed', 'date-case-terminated',
+    'docket-num', 'pacer-case-num'])
 
 solr_fields = set(fl + ['closed_captions'] + facet_fields)
 re_field_pattern = re.compile('(' + '|'.join(solr_fields) + '):')
 
 field_set = {
-    'default': ['identifier', 'mediatype', 'title', 'date_str', 'collection', 'downloads'],
-    'tv': ['identifier', 'title', 'date_str', 'collection', 'source', 'tuner',
+    'default': ['identifier', 'mediatype', 'title', 'date_str', 'collection',
+        'downloads', 'item_size', 'item_file_format', 'uploader'],
+    'all': ['identifier', 'mediatype', 'title', 'creator', 'date_str',
+        'collection', 'downloads', 'item_size', 'item_file_format',
+        'publisher', 'language', 'scanningcenter', 'subject', 'sponsor',
+        'boxid', 'isbn', 'oclc-id', 'lccn', 'imagecount', 'foldoutcount',
+        'repub_state', 'ppi', 'scandate', 'addeddate', 'publicdate',
+        'sponsordate', 'contributor', 'uploader', 'scanner', 'operator',
+        'case-name', 'court', 'date-case-filed', 'date-case-terminated',
+        'docket-num', 'pacer-case-num', 'handwritten', 'source', 'tuner',
         'rating', 'tv_channel', 'tv_category', 'tv_program', 'tv_episode_name',
         'tv_original_year', 'tv_starring', 'audio_codec', 'video_codec',
         'frames_per_second', 'start_localtime', 'start_time', 'stop_time',
-        'runtime', 'aspect_ratio', 'closed_captioning'],
-    'books': ['identifier', 'title', 'creator', 'date_str', 'collection',
-        'publisher', 'language', 'scanningcenter', 'subject', 'sponsor',
-        'imagecount', 'foldoutcount', 'repub_state', 'ppi', 'scandate',
-        'addeddate', 'publicdate', 'sponsordate', 'contributor', 'uploader',
-        'scanner', 'operator', 'downloads', 'handwritten'],
-    'software': ['identifier', 'title', 'date_str', 'collection',
-        'publisher', 'subject', 'uploader', 'downloads', ],
-    'all': ['identifier', 'mediatype', 'title', 'creator', 'date_str', 'collection',
-        'publisher', 'language', 'scanningcenter', 'subject', 'sponsor',
-        'imagecount', 'foldoutcount', 'repub_state', 'ppi', 'scandate',
-        'addeddate', 'publicdate', 'sponsordate', 'contributor', 'uploader',
-        'scanner', 'operator', 'downloads', 'handwritten', 'source', 'tuner',
-        'rating', 'tv_channel', 'tv_category', 'tv_program', 'tv_episode_name',
-        'tv_original_year', 'tv_starring', 'audio_codec', 'video_codec',
-        'frames_per_second', 'start_localtime', 'start_time', 'stop_time',
-        'runtime', 'aspect_ratio', 'closed_captioning'],
+        'runtime', 'aspect_ratio', 'closed_captioning', 'nav_order',
+        'num_recent_reviews', 'num_top_dl', 'spotlight_identifier',
+        'num_top_ba', 'shiptracking', 'show_browse_title_link',
+        'show_browse_author_link', 'taper'],
+    'collection': ['identifier', 'mediatype', 'title', 'date_str',
+        'collection', 'nav_order' ,'num_recent_reviews', 'num_top_dl',
+        'spotlight_identifier', 'num_top_ba', 'shiptracking',
+        'show_browse_title_link', 'show_browse_author_link'],
+    'tv': ['identifier', 'mediatype', 'title', 'date_str', 'collection',
+        'item_size', 'description', 'source', 'tuner', 'rating', 'tv_channel',
+        'tv_category', 'tv_program', 'tv_episode_name', 'tv_original_year',
+        'tv_starring', 'audio_codec', 'video_codec', 'frames_per_second',
+        'start_localtime', 'start_time', 'stop_time', 'runtime',
+        'aspect_ratio', 'closed_captioning'],
+    'books': ['identifier', 'mediatype', 'title', 'creator', 'date_str',
+        'collection', 'publisher', 'language', 'scanningcenter', 'subject',
+        'sponsor', 'boxid', 'downloads', 'item_size', 'item_file_format',
+        'isbn', 'oclc-id', 'lccn', 'imagecount', 'foldoutcount', 'repub_state',
+        'ppi', 'scandate', 'addeddate', 'publicdate', 'sponsordate',
+        'contributor', 'uploader', 'scanner', 'operator', 'handwritten'],
+    'software': ['identifier', 'mediatype', 'title', 'date_str', 'collection',
+        'publisher', 'subject', 'uploader', 'downloads', 'item_size',
+        'item_file_format' ],
+    'etree': ['identifier', 'mediatype', 'title', 'date_str', 'collection',
+        'downloads', 'item_size', 'item_file_format', 'subject', 'source',
+        'runtime', 'venue', 'coverage', 'uploader', 'transferer', 'updater'],
+    'nasa': ['identifier', 'mediatype', 'title', 'date_str', 'collection',
+        'downloads', 'item_size', 'item_file_format', 'subject', 'filename'],
+    'usfederalcourts': ['identifier', 'mediatype', 'title', 'date_str',
+        'collection', 'downloads', 'case-name', 'court', 'date-case-filed',
+        'date-case-terminated', 'docket-num', 'pacer-case-num', 'item_size',
+        'item_file_format'],
+    'librivox': ['identifier', 'mediatype', 'title', 'creator', 'date_str',
+        'collection', 'subject',
+        'downloads', 'item_size', 'item_file_format',
+        'addeddate', 'publicdate', 
+        'uploader', 'source', 'taper'],
+
 }
+all_fields = set(field_set['all'] + ['date'])
 
 year_gap = 10
 
@@ -103,28 +157,28 @@ solr_select_url = 'http://' + addr + '/solr/select?wt=json' + \
     '&json.nl=arrarr' + \
     '&defType=edismax' + \
     '&qf=text+closed_captions' + \
-    '&facet=true&facet.limit=20&facet.mincount=1' + \
-    '&f.language_facet.facet.method=enum' + \
-    '&f.mediatype.facet.method=enum' + \
-    '&f.tv_category.facet.method=enum' + \
-    '&f.tv_channel.facet.method=enum' + \
-    '&f.language_facet.facet.method=enum' + \
-    '&f.year_from_date.facet.sort=index' + \
-    '&f.noindex.facet.sort=index' + \
-    '&f.noindex.facet.mincount=0' + \
-    '&f.year_from_date.facet.limit=-1' + \
-    '&f.tv_original_year.facet.sort=index' + \
-    '&f.tv_original_year.facet.limit=-1' + \
-    '&facet.range=date&f.date.facet.range.start=0000-01-01T00:00:00Z&f.date.facet.range.end=2015-01-01T00:00:00Z&f.date.facet.range.gap=%2B' + str(year_gap) + 'YEAR' + \
     '&f.description.hl.fragsize=200' + \
     '&f.closed_captions.hl.fragsize=400' + \
-    '&bq=(*:* -collection:ourmedia -collection:opensource* collection:*)^10' + \
+    '&bq=' + quote('(*:* -collection:ourmedia -collection:opensource* collection:*)^10') + \
     '&q.op=AND'
 #    '&spellcheck.collate=true' + \
 #    '&spellcheck.maxCollationTries=5' + \
 #    '&spellcheck.accuracy=0.5' + \
 #    '&facet.range=imagecount&f.imagecount.facet.range.start=0&f.imagecount.facet.range.end=1000000&f.imagecount.facet.range.gap=100' + \
 #    '&facet.range=downloads&f.downloads.facet.range.start=0&f.downloads.facet.range.end=1000000&f.downloads.facet.range.gap=100,10000' + \
+
+facet_enum_fields = [ 'noindex', 'language_facet', 'mediatype', 'tv_category', 'tv_channel', 'language_facet', 'handwritten', 'scanningcenter' ]
+
+# '&f.' + f + '.facet.method=enum' 
+
+facet_params = '&facet=true&facet.limit=20&facet.mincount=1' + \
+    '&f.year_from_date.facet.sort=index' + \
+    '&f.year_from_date.facet.limit=-1' + \
+    '&f.noindex.facet.sort=index' + \
+    '&f.noindex.facet.mincount=0' + \
+    '&f.tv_original_year.facet.sort=index' + \
+    '&f.tv_original_year.facet.limit=-1' + \
+    '&facet.range=date&f.date.facet.range.start=0000-01-01T00:00:00Z&f.date.facet.range.end=2015-01-01T00:00:00Z&f.date.facet.range.gap=%2B' + str(year_gap) + 'YEAR'
 
 lang_map = {
     'eng': 'English', 'fre': 'French', 'ger': 'German', 'spa': 'Spanish',
@@ -157,7 +211,6 @@ def test_quote():
     assert quote('@test test@') == '%40test+test%40'
 
 locale.setlocale(locale.LC_ALL, 'en_US')
-
 def comma(n):
     return locale.format("%d", n, grouping=True)
 
@@ -318,6 +371,24 @@ def changequery(new_args):
 def zap_field(fields, cur):
     return changequery({'field_set': None, 'fields': ','.join(f for f in fields if f != cur)})
 
+def selected_fields():
+    if request.args.get('field_set'):
+        fields = field_set[request.args['field_set']]
+    elif request.args.get('fields',''):
+        fields = request.args.get('fields','').split(',')
+    else:
+        fields = field_set['default']
+    extra = request.args.get('extra')
+    if not extra:
+        return fields
+    extra = [i for i in extra.split(',') if i]
+
+    for f in 'mediatype', 'identifier':
+        if f in fields:
+            index = fields.index(f)
+            return fields[:index] + extra + fields[index:]
+    return extra + fields
+
 def test_changequery():
     with app.test_client() as c:
         rv = c.get('/?mediatype=movies&language=eng')
@@ -341,8 +412,8 @@ def get_img_thumb(identifier):
 
 re_date_range = re.compile('^(\d+)-(\d+)$')
 
-def build_pager(num_found, page, pages_in_set = 10):
-    pages = (num_found / results_per_page) + 1
+def build_pager(num_found, page, pages_in_set = 10, rows=results_per_page):
+    pages = (num_found / rows) + 1
     half = pages_in_set/2
     if pages < pages_in_set:
         first_page_in_set = 1
@@ -361,36 +432,48 @@ def build_pager(num_found, page, pages_in_set = 10):
         'page_list': range(first_page_in_set, last_page_in_set+1),
     }
 
-def get_collection_titles(results):
+def get_collections(results):
     collections = set()
-    if 'facet_counts' in results:
-        collections = set(key for key, num in results['facet_counts']['facet_fields']['collection'])
+    try:
+        collections = set(key for key, num in results['facet_counts']['facet_fields']['collection_facet'])
+    except KeyError:
+        pass
     for doc in results['response']['docs']:
         collections.update(doc.get('collection', []))
 
     if not collections:
         return {}
+    collections = list(collections)
 
-    url = 'http://' + addr + '/solr/select?wt=json' + \
-        '&json.nl=arrarr' + \
-        '&defType=edismax' + \
-        '&qf=identifier' + \
-        '&q=' + quote(' OR '.join(collections)) + \
-        '&fl=identifier,title' + \
-        '&rows=%d' % len(collections)
-    reply = urlopen(url).read()
-    try:
-        data = json.loads(reply)
-    except ValueError:
-        raise SolrError(reply)
-    return dict((c['identifier'], c['title']) for c in data['response']['docs'])
+    docs = []
+    while collections:
+        cur = collections[:50]
+        del collections[:50]
+        url = 'http://' + addr + '/solr/select?wt=json' + \
+            '&json.nl=arrarr' + \
+            '&defType=edismax' + \
+            '&qf=identifier' + \
+            '&q=' + quote(' OR '.join(cur)) + \
+            '&fl=identifier,title,hidden,access-restricted' + \
+            '&rows=%d' % len(cur)
+        reply = urlopen(url).read()
+        try:
+            data = json.loads(reply)
+        except ValueError:
+            raise SolrError(reply)
+        docs += data['response']['docs']
+    return docs
+
+def get_collection_titles(results):
+    return dict((c['identifier'], c['title']) for c in get_collections(results))
 
 @app.route('/mlt/<identifier>')
-def view_mlt(identifier):
+def mlt_page(identifier):
     url = 'http://' + addr + '/solr/mlt?wt=json' + \
         '&json.nl=arrarr' + \
         '&q=identifier:' + quote(identifier) + \
-        '&mlt.fl=creator,title,subject,collection,mediatype,description,case-name,sponsor,closed_captions' + \
+        '&mlt.fl=creator,title,subject,collection,mediatype,description,' + \
+            'case-name,sponsor,closed_captions' + \
         '&mlt.mintf=1' + \
         '&fl=score,*' + \
         '&indent=on' + \
@@ -401,16 +484,25 @@ def view_mlt(identifier):
     except ValueError:
         return ret
     collection_titles = get_collection_titles(data)
-    return render_template('mlt.html', identifier=identifier, mlt=data, get_movie_thumb=get_movie_thumb, pick_best=pick_best, collection_titles=collection_titles, len=len)
+    return render_template('mlt.html', identifier=identifier, mlt=data,
+            get_movie_thumb=get_movie_thumb, pick_best=pick_best,
+            collection_titles=collection_titles, len=len)
 
 re_all_field = re.compile(r'^([A-Za-z0-9_-]+):\*')
-def search(q, url_params, spellcheck=True):
+def search(q, url_params, spellcheck=True, facets=False, rows=results_per_page, grid=False):
     url = solr_select_url + '&q=' + quote(q) + url_params
-    url += '&rows=' + ('100' if request.args.get('view') == 'grid' else str(results_per_page))
-    if request.args.get('field_set'):
-        url += '&fl=' + ','.join(fl + field_set[request.args['field_set']])
+    if facets:
+        url += facet_params
+        url += ''.join('&f.' + f + '.facet.method=enum' for f in facet_enum_fields)
+    url += '&rows=' + str(rows)
+    if grid:
+        cur_fields = list(selected_fields())
+        for f in 'collection', 'noindex', 'scanner', 'item_filename':
+            if f not in cur_fields:
+                cur_fields.append(f)
+        url += '&fl=' + ','.join(cur_fields)
     else:
-        url += '&fl=' + ','.join(fl) + request.args.get('fields','')
+        url += '&fl=' + ','.join(fl)
 
     if spellcheck:
         #spellcheck_q = quote(re_field_pattern.sub('', q))
@@ -435,8 +527,10 @@ def search(q, url_params, spellcheck=True):
     return {'url': url, 'results': results, 't_solr': t_solr}
 
 
-re_to_esc = re.compile(r'[\[\]:]')
+re_to_esc = re.compile(r'[\[\]:()]')
 def esc(s):
+    if not isinstance(s, basestring):
+        return s
     return re_to_esc.sub(lambda m:'\\' + m.group(), s)
 
 @app.route("/thumbs/<identifier>")
@@ -480,10 +574,198 @@ def fix_language(k, v):
         return v
     return rev_lang_map[v.lower()]
 
+re_convert_to_range = re.compile('^\s*([<>])\s*(-?\d+)\s*$')
+
+def fmt_filesize(value, binary=False):
+    """Format the value like a 'human-readable' file size (i.e. 13 kB,
+4.1 MB, 102 Bytes, etc). Per default decimal prefixes are used (Mega,
+Giga, etc.), if the second parameter is set to `True` the binary
+prefixes are used (Mebi, Gibi).
+"""
+    bytes = float(value)
+    base = binary and 1024 or 1000
+    prefixes = [
+        (binary and 'KiB' or 'kB'),
+        (binary and 'MiB' or 'MB'),
+        (binary and 'GiB' or 'GB'),
+        (binary and 'TiB' or 'TB'),
+        (binary and 'PiB' or 'PB'),
+        (binary and 'EiB' or 'EB'),
+        (binary and 'ZiB' or 'ZB'),
+        (binary and 'YiB' or 'YB')
+    ]
+    if bytes == 1:
+        return '1 Byte'
+    elif bytes < base:
+        return '%d Bytes' % bytes
+    else:
+        for i, prefix in enumerate(prefixes):
+            unit = base ** (i + 2)
+            if bytes < unit:
+                return '%.2f %s' % ((base * bytes / unit), prefix)
+        return '%.2f %s' % ((base * bytes / unit), prefix)
+
+def grid_field(f):
+    v = request.args[f]
+    if f in ('date_str', 'date'):
+        return ('date_str', esc(v))
+    m = re_convert_to_range.match(v)
+    if not m:
+        return (f, v)
+    if m.group(1) == '<':
+        return (f, '[* TO ' + m.group(2) + ']')
+    else:
+        assert m.group(1) == '>'
+        return (f, '[' + m.group(2) + ' TO *]')
+
+def add_hidden_tag(docs, collections):
+    for doc in docs:
+        if 'collection' not in doc:
+            continue
+        k = 'access-restricted'
+        if any(k in collections.get(c, {}) and collections[c][k][0] == 'true' for c in doc['collection']):
+            doc[k] = 'true'
+
+@app.route("/collection/<collection>")
+def collection_page(collection):
+
+    t0 = time()
+    url = 'http://' + addr + '/solr/select?wt=json' + \
+        '&json.nl=arrarr' + \
+        '&defType=edismax' + \
+        '&qf=identifier' + \
+        '&q=' + quote(collection) + \
+        '&fl=identifier,title,hidden,access-restricted' + \
+        '&rows=1'
+    ret = urlopen(url).read()
+    try:
+        data = json.loads(ret)
+    except ValueError:
+        return ret
+    title = data['response']['docs'][0]['title']
+
+    url = 'http://' + addr + '/solr/select?wt=json' + \
+        '&json.nl=arrarr' + \
+        '&q=collection:' + quote(collection) + \
+        '&fl=identifier' + \
+        '&indent=on' + \
+        '&stats=on' + \
+        '&stats.field=item_size' + \
+        '&stats.field=downloads' + \
+        '&rows=0'
+    ret = urlopen(url).read()
+    try:
+        data = json.loads(ret)
+    except ValueError:
+        return ret
+    t_solr = time() - t0
+
+    #return Response(pformat(data['stats']['stats_fields']), mimetype='text/plain')
+    return render_template('collection.html', collection=collection,
+            title=title, comma=comma, fmt_filesize=fmt_filesize, results=data,
+            t_solr=t_solr)
+
+@app.route("/facet/<field>")
+def facet_page(field):
+    rows = 0
+    fq = ''.join('&fq=' + quote('%s:(%s)' % grid_field(f)) for f in all_fields if request.args.get(f))
+    q = '*:*'
+    url_params = '&facet=true&facet.mincount=1&facet.limit=-1&facet.sort=count' 
+    url_params += '&facet.field=' + field
+    url_params += ''.join('&f.' + f + '.facet.method=enum' for f in facet_enum_fields)
+
+    search_results = search(q, url_params, spellcheck=False, rows=rows)
+    return render_template('facet.html', field=field,
+        counts=search_results['results']['facet_counts']['facet_fields'][field],
+        t_solr=search_results['t_solr'],
+    )
+
+@app.route("/grid")
+def grid_page():
+    new_query_string = '&'.join(k + '=' + v for k, v in (i.split('=', 1) for i in request.query_string.split('&') if '=' in i) if v != '')
+    if request.query_string != new_query_string:
+        return redirect(url_for('grid_page') + '?' + new_query_string)
+
+    page = int(request.args.get('page', 1))
+
+    extra = request.args.get('extra', '').split(',')
+    fields = selected_fields()
+
+    grid_facet_fields = []
+    for f in fields:
+        if f == 'scanningcenter' or f in facet_fields:
+            grid_facet_fields.append(f)
+        elif f + '_facet' in facet_fields:
+            grid_facet_fields.append(f + '_facet')
+
+    rows = int(request.args.get('rows', 50))
+    start = rows * (page-1)
+    fq = ''.join('&fq=' + quote('%s:(%s)' % grid_field(f)) for f in all_fields if request.args.get(f))
+    if not fq:
+        return render_template('grid.html', changequery=changequery,
+            field_set=field_set, zap_field=zap_field, page=page, fields=fields,
+            results=[], results_per_page=50, 
+            quote=quote, extra=extra, comma=comma, len=len, 
+            list_fields=list_fields, 
+            single_value_fields=single_value_fields, int=int,
+            solr_esc=esc, isinstance=isinstance, basestring=basestring, rows=rows,
+            fmt_filesize=fmt_filesize)
+
+    url_params = '&start=%d' % start + fq
+    url_params += '&facet=true&facet.limit=20&facet.mincount=1' 
+    url_params += ''.join('&facet.field=' + f for f in grid_facet_fields)
+    url_params += ''.join('&f.' + f + '.facet.method=enum' for f in facet_enum_fields)
+    q = request.args.get('q', '*:*')
+    try:
+        search_results = search(q, url_params, spellcheck=False, rows=rows, grid=True)
+    except SolrError as solr_error:
+        return solr_error.value
+
+    results = search_results['results']
+    collections = dict((c['identifier'], c) for c in get_collections(results))
+
+    add_hidden_tag(results['response']['docs'], collections)
+    t_solr = search_results['t_solr']
+    url = search_results['url']
+    pager = build_pager(results['response']['numFound'], page, rows=rows)
+
+    for doc in results['response']['docs']:
+        if doc.get('mediatype') == 'texts' and doc.get('scanner'):
+            doc['thumb_path'] = '/page/{{doc.identifier}}_cover_h80.jpg'
+        else:
+            first_img = None
+            first_logo = None
+            for filename in doc['item_filename']:
+                if filename.endswith('thumb.jpg'):
+                    doc['thumb_path'] = filename
+                    break
+                lc_filename = filename.lower()
+                if not first_img and any(lc_filename.endswith('.' + ext) for ext in ('jpg', 'jpeg', 'png')):
+                    first_img = filename
+                if not first_logo and any(lc_filename.endswith('logo.' + ext) for ext in ('jpg', 'jpeg', 'png')):
+                    first_logo = filename
+            if not doc.get('thumb_path'):
+                if first_logo:
+                    doc['thumb_path'] = first_logo
+                elif first_img:
+                    doc['thumb_path'] = first_img
+
+    return render_template('grid.html', changequery=changequery,
+        field_set=field_set, zap_field=zap_field, page=page, fields=fields,
+        results=results, results_per_page=50, pager=pager, t_solr=t_solr,
+        quote=quote, extra=extra, comma=comma, len=len, list_fields=list_fields, 
+        single_value_fields=single_value_fields, int=int,
+        solr_esc=esc, isinstance=isinstance, basestring=basestring, rows=rows,
+        fmt_filesize=fmt_filesize)
+
 @app.route("/")
-def do_search():
+def search_page():
     valid_views = set(['search', 'grid', 'thumb_compare'])
     view = request.args.get('view', 'search')
+    if view == 'grid':
+        new_query_string = '&'.join(k + '=' + v for k, v in (i.split('=', 1) for i in request.query_string.split('&') if '=' in i) if v != '' and k != 'view')
+        return redirect(url_for('grid_page') + '?' + new_query_string)
+
     if view not in valid_views:
         view = 'search'
 
@@ -526,7 +808,7 @@ def do_search():
 
     url_params = '&start=%d' % start + fq + url_facet_fields
     try:
-        search_results = search(q, url_params, spellcheck=True)
+        search_results = search(q, url_params, spellcheck=True, facets=True)
     except SolrError as solr_error:
         return solr_error.value
     results = search_results['results']
@@ -539,13 +821,14 @@ def do_search():
     if results['response']['numFound'] == 0 and did_you_mean and 'nfpr' not in request.args:
         new_q = ''.join(i[1] for i in did_you_mean)
         try:
-            search_results = search(new_q, url_params, spellcheck=False)
+            search_results = search(new_q, url_params, spellcheck=False, facets=True)
         except SolrError as solr_error:
             return solr_error.value
         alt_results = True
 
     t0_solr = time()
-    collection_titles = get_collection_titles(results)
+    collections = dict((c['identifier'], c) for c in get_collections(results))
+    add_hidden_tag(results['response']['docs'], collections)
     t_solr += time() - t0_solr
 
     pager = build_pager(results['response']['numFound'], page)
@@ -568,10 +851,11 @@ def do_search():
         get_movie_thumb=get_movie_thumb, year_gap=year_gap,
         find_item=find_item, enumerate=enumerate, len=len,
         pick_best=pick_best, url=url, facet_args_dict=facet_args_dict,
-        get_img_thumb = get_img_thumb, changequery=changequery, zap_field=zap_field,
-        token_hl=token_hl, t_solr=t_solr, collection_titles=collection_titles,
-        did_you_mean=did_you_mean, alt_results=alt_results,
-        fmt_licenseurl=fmt_licenseurl, add_thumbs_to_docs=add_thumbs_to_docs,
+        get_img_thumb = get_img_thumb, changequery=changequery,
+        zap_field=zap_field, token_hl=token_hl, t_solr=t_solr,
+        collections=collections, did_you_mean=did_you_mean,
+        alt_results=alt_results, fmt_licenseurl=fmt_licenseurl,
+        add_thumbs_to_docs=add_thumbs_to_docs,
         strip_long_repeating_phrase=strip_long_repeating_phrase,
         list_fields=list_fields, field_set=field_set,
         date_facet=(int(date_facet) if date_facet is not None else None))

@@ -1,0 +1,68 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<title>{{ title }} ({{ collection }}) - Internet Archive</title>
+{# Copyright(c)2012 Internet Archive. Software license GPL version 2. #}
+{# Written by Edward Betts <edward@archive.org> #}
+<style>.num { text-align: right; }</style>
+
+</head>
+<body>
+
+<div class="container-fluid">
+<h1>{{ title }}</h1>
+
+{% set details = "http://www.archive.org/details/" + collection %}
+<a href="{{ details }}">{{ details }}</a><p>
+
+<table>
+<tr><td>Item count:</td>
+<td class="num">
+{{ comma(results['response']['numFound']) }}</td></tr>
+<tr><td>Total size:</td>
+<td class="num">
+{% if results.stats.stats_fields.item_size.sum %}
+    {{ fmt_filesize(results.stats.stats_fields.item_size.sum) }}
+    </td><td>
+    ({{ comma(results.stats.stats_fields.item_size.count)}} items with size information)
+{% endif %}
+</td></tr>
+<tr><td>Largest item:</td>
+<td class="num">
+{% if results.stats.stats_fields.item_size.max %}
+    {{ fmt_filesize(results.stats.stats_fields.item_size.max) }}
+{% endif %}
+</td><td>
+<a href="{{url_for('grid_page')}}?collection={{collection}}&amp;sort=item_size+desc&amp;item_size=*">more...</a>
+</td></tr>
+<tr><td>Mean item size:</td>
+<td class="num">
+{% if results.stats.stats_fields.item_size.mean %}
+    {{ fmt_filesize(results.stats.stats_fields.item_size.mean) }}
+{% endif %}
+</td></tr>
+<tr><td>Total downloads:</td>
+<td class="num">
+{% if results.stats.stats_fields.downloads.sum %}
+    {{ comma(results.stats.stats_fields.downloads.sum) }}
+{% endif %}
+</td></tr>
+<tr><td>Most downloaded:</td>
+<td class="num">
+{% if results.stats.stats_fields.downloads.max %}
+    {{ comma(results.stats.stats_fields.downloads.max) }}
+{% endif %}
+</td><td>
+<a href="{{url_for('grid_page')}}?collection={{collection}}&amp;sort=downloads+desc&amp;item_size=*">more...</a>
+</td></tr>
+
+</table>
+
+<p>Time taken: {{ '%.2f' | format(t_solr) }} seconds.<p>
+
+
+</div>
+
+</body>
+</html>
