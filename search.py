@@ -121,7 +121,8 @@ field_set = {
         'item_file_format' ],
     'etree': ['identifier', 'mediatype', 'title', 'date_str', 'collection',
         'downloads', 'item_size', 'item_file_format', 'subject', 'source',
-        'runtime', 'venue', 'coverage', 'uploader', 'transferer', 'updater'],
+        'runtime', 'venue', 'coverage', 'uploader', 'transferer', 'updater',
+        'taper'],
     'nasa': ['identifier', 'mediatype', 'title', 'date_str', 'collection',
         'downloads', 'item_size', 'item_file_format', 'subject', 'filename'],
     'usfederalcourts': ['identifier', 'mediatype', 'title', 'date_str',
@@ -676,9 +677,11 @@ def collection_page(collection):
 
 @app.route("/fields")
 def select_fields_page():
+    fields = selected_fields()
     return render_template('select_fields.html',
-        default_fields=field_set['default'],
-        all_fields=field_set['all']
+        fields=fields,
+        all_fields=field_set['all'],
+        changequery=changequery,
     )
 
 @app.route("/facet/<field>")
@@ -762,7 +765,7 @@ def grid_page():
         else:
             first_img = None
             first_logo = None
-            for filename in doc['item_filename']:
+            for filename in doc.get('item_filename', []):
                 if filename.endswith('thumb.jpg'):
                     doc['thumb_path'] = filename
                     break

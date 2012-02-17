@@ -17,6 +17,7 @@ body {
 input.filterbox {
     width:  100%;
 }
+div.nowrap { display: inline-block; }
 .nowrap { white-space: nowrap; }
 th { white-space: nowrap; }
 
@@ -78,25 +79,6 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
 
 <div class="container-fluid">
 
-    <div class="modal fade" id="myModal">
-        <div class="modal-header">&nbsp;<a class="close" data-dismiss="modal">&times;</a>
-            <h3>Visible fields</h3>
-        </div>
-        <div class="modal-body">
-        <form>
-        <table>
-        {% for f in field_set['all'] %}
-            <tr><td><input type="checkbox"> {{ f }}</td></tr>
-        {% endfor %}
-        </table>
-        </form>
-        </div>
-        <div class="modal-footer">
-            <a href="#" class="btn btn-primary">Save changes</a>
-            <a href="#" class="btn" data-dismiss="modal">Close</a>
-        </div>
-    </div>
-
     {% set field_sets = [
         (None, None, 'Default'),
         ('all', 'asterisk', 'All'), 
@@ -120,16 +102,9 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
         {% endif %}
         <a href="?{{changequery({'extra': None, 'fields': None, 'field_set': field_set})}}">{% if icon %}<i class="icon-{{icon}}">{% endif %}</i>{{ label }}</a></li>
     {% endfor %}
-    <li class="dropdown" id="menu1">
-        <a class="dropdown-toggle" data-toggle="dropdown" href="#menu1">
-        Add <b class="caret"></b></a>
-        <ul class="dropdown-menu">
-            {% for f in field_set.all if f not in fields %}
-            <li><a href="?{{changequery({'extra': ','.join(extra + [f])})}}">{{ f }}</a></li>
-            {% endfor %}
-        </ul>
-    </li>
-    <li><a data-toggle="modal" href="#myModal">select</a></li>
+        <li{% if (request.args.fields) %} class="active"{% endif %}>
+            <a href="{{ url_for('select_fields_page') + '?' + changequery({})}}">select</a>
+        </li>
     </ul>
 
     rows: 
@@ -229,54 +204,42 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
             {% if doc.mediatype in mediatype_icons %}<i class="icon-{{mediatype_icons[doc.mediatype]}}"></i>{% endif %}
             {{ doc.mediatype }}
             {% set v = doc.mediatype %}
-            <span class="nowrap"><a href="?{{changequery({f: request.args.get(f, '') + '"%s"' % solr_esc(v)})}}"><i class="icon-plus-sign" alt="+"></i></a><a href="?{{changequery({f: request.args.get(f, '') + '-"%s"' % solr_esc(v)})}}"><i class="icon-minus-sign" alt="-"></i></a></span>
+            <div class="nowrap"><a href="?{{changequery({f: request.args.get(f, '') + '"%s"' % solr_esc(v)})}}"><i class="icon-plus-sign" alt="+"></i></a><a href="?{{changequery({f: request.args.get(f, '') + '-"%s"' % solr_esc(v)})}}"><i class="icon-minus-sign" alt="-"></i></a></div>
         {% else %}
             <span class="label label-important">missing</span>
         {% endif %}
     {% elif f == 'title' %}
         {% set title = doc.title %}
         {% if len(doc.title) < 50 %}
-            <span class="nowrap">{{ title }}</span>
+            <div class="nowrap">{{ title }}</div>
         {% elif len(doc.title) > 80 %}
-            <span title="{{ title }}">{{ title | truncate(length=80) }}</span>
+            <div title="{{ title }}">{{ title | truncate(length=80) }}</div>
         {% else %}
             {{ title }}
         {% endif %}
     {% elif f.startswith('description') and 'tvarchive' in doc.collection %}
-        <span class="nowrap">{{ doc[f] }}</span>
+        <div class="nowrap">{{ doc[f] }}</div>
     {% elif f == 'item_size' %}
         {% if f in doc %}
             {{ fmt_filesize(doc[f]) }}
         {% endif %}
     {% elif f not in single_value_fields %}
+        <div style="display:inline-block">
         {% set values = doc.get(f, []) %}
-        {% set nowrap_field = False %}
-        {% if len(''.join(values)) < 50 %}
-            {% set nowrap_field = True %}
-            <span class="nowrap">
-        {% endif %}
         {% for v in values %}
-            {% if nowrap_field %}
-                {{v}}
-            {% elif len(v) < 40 %}
-                <span class="nowrap">{{v}}
-            {% else %}
-                {{v}} <span class="nowrap">
-            {% endif %}
+            <span class="nowrap">{{v}}
 <a href="?{{changequery({f: request.args.get(f, '') + '"%s"' % solr_esc(v)})}}"><i class="icon-plus-sign" alt="+"></i></a><a href="?{{changequery({f: request.args.get(f, '') + '-"%s"' % solr_esc(v)})}}"><i class="icon-minus-sign" alt="-"></i></a>
-            {% if not nowrap_field %}
-                </span>
-            {% endif %}
-        {% endfor %}
-        {% if nowrap_field %}
             </span>
-        {% endif %}
+        {% endfor %}
+        </div>
     {% elif f in ('publisher', 'scanningcenter') %}
+        <div style="display:inline-block">
         {% set v = doc.get(f) %}
         {% if v %}
         {{ v }}
         <span class="nowrap"><a href="?{{changequery({f: request.args.get(f, '') + '"%s"' % v})}}"><i class="icon-plus-sign" alt="+"></i></a><a href="?{{changequery({f: request.args.get(f, '') + '-"%s"' % v})}}"><i class="icon-minus-sign" alt="-"></i></a></span>
         {% endif %}
+        </div>
     {% elif f == 'downloads' %}
         {{ comma(doc.get(f, 0)) }}
     {% elif doc.get(f) %}
