@@ -11,34 +11,95 @@
 <script language="javascript" type="text/javascript" src="http://edward.openlibrary.org/javascript/jquery/jquery.js"></script>
 <script language="javascript" type="text/javascript" src="http://edward.openlibrary.org/javascript/jquery-ui/jquery-ui.js"></script>
 
+
     <style>
-    #sortable { list-style-type: none; margin: 0; padding: 0; float: left; margin-right: 10px; }
-    #sortable li { margin: 0 5px 5px 5px; padding: 5px; font-size: 1.2em; }
+    #sortable { list-style-type: none; margin: 0; padding: 0; float: left; }
+    #sortable li { margin: 0 3px 3px 3px; padding: 0.4em; padding-left: 1.5em; font-size: 1.4em; height: 18px; }
+    #sortable li span { position: absolute; margin-left: -1.3em; }
     </style>
     <script>
-    $(function() {
-        $( "#sortable" ).sortable({ });
-    });
-    </script>
+    var base_url = "{{ url_for('grid_page') }}?";
+    var params = "{{changequery({'fields':None, 'field_set': None}) | safe }}";
+    if (params) {
+        base_url += params + '&';
+    }
+    base_url += 'fields='
 
+    function update_backlink() {
+        var field_list = [];
+        $('#sortable li:visible').each(function(i) {
+            field_list.push($(this).text());
+        });
+        $("#backlink").attr('href', base_url + field_list.join(','));
+    }
+
+    $(function() {
+        $( "#sortable" ).sortable({
+            stop: function(event, ui) { update_backlink(); }
+        });
+        $( "#sortable" ).disableSelection();
+        $( ".hidden" ).hide();
+        update_backlink();
+    });
+
+    function flip(field) {
+        $( "#x_" + field ).toggle();
+        update_backlink();
+    }
+
+    </script>
 </head>
 <body>
 
 <div class="container-fluid">
 <h1>Select fields</h1>
 
+
+<a id="backlink" href="#">back to grid</a><p>
+
+<div>
 <ul id="sortable" >
     {% for f in all_fields %}
-    <li class="ui-state-default">
-    {% if f in default_fields %}
-    <input type="checkbox" name="{{ f }}" value="1" checked="checked">
-    {% else %}
-    <input type="checkbox" name="{{ f }}" value="1">
-    {% endif %}
-    <label name="{{ f }}">{{ f }}</label>
-    </li>
+        <li class="ui-state-default{% if f not in fields %} hidden{%endif%}" id="x_{{f}}"><span class="ui-icon ui-icon-arrowthick-2-n-s"></span>{{ f }}</li>
+        {# <li class="ui-state-default{% if f not in fields %} hidden{%endif%}" id="x_{{f}}">{{ f }}</li> #}
     {% endfor %}
 </ul>
+</div>
+
+{% set seen = set() %}
+
+<table style="float: left">
+<tr><td colspan="6">select fields, {{ field_count }} available</td></tr>
+<tr>
+{% for f in field_set['default'] + not_in_other if f not in seen %}
+<td>
+<input type="checkbox" {% if f in fields %}checked="checked"{% endif %} onchange="flip('{{f}}');">
+{% if seen.add(f) %}{% endif %}
+{{ f }}</td>
+<td align="right">{% if f in field_counts %}({{comma(field_counts[f])}}){% endif %}</td>
+{% if loop.index % 3 == 0 %}
+</tr><tr>
+{% endif %}
+{% endfor %}
+</tr>
+{% for k in 'collection', 'rights', 'maps_usgs', 'tv', 'album_recordings', 'us_patents', 'books', 'ourmedia', 'web', 'etree', 'universallibrary', 'nasa', 'usfederalcourts', 'sugarmegs' %}
+<tr><td colspan="6"><strong>{{ k }}</strong></td></tr>
+<tr>
+{% for f in field_set[k] if f not in seen %}
+<td>
+<input type="checkbox" {% if f in fields %}checked="checked"{% endif %} onchange="flip('{{f}}');">
+{% if seen.add(f) %}{% endif %}
+{{ f }}</td>
+<td align="right">{% if f in field_counts %}({{comma(field_counts[f])}}){% endif %}</td>
+{% if loop.index % 3 == 0 %}
+</tr><tr>
+{% endif %}
+{% endfor %}
+</tr>
+{% endfor %}
+
+
+</table>
 
 </div>
 

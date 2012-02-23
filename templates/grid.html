@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-<title>{% if q %}{{ q + ' - ' }}{% endif %}Internet Archive search</title>
+<title>{% if search_query %}{{ search_query }} - {% endif %}Internet Archive search</title>
 {# Copyright(c)2012 Internet Archive. Software license GPL version 2. #}
 {# Written by Edward Betts <edward@archive.org> #}
 <script language="javascript" type="text/javascript" src="http://edward.openlibrary.org/javascript/jquery/jquery.js"></script>
@@ -17,11 +17,11 @@ body {
 input.filterbox {
     width:  100%;
 }
-div.nowrap { display: inline-block; }
-.nowrap { white-space: nowrap; }
 th { white-space: nowrap; }
 
 img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
+
+.nowrap { white-space: nowrap; }
 
 .selected { 
   padding: 2px;
@@ -85,6 +85,7 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
         ('collection', None, 'Collections'), 
         ('tv', 'film', 'TV'),
         ('books', 'book', 'Books'), 
+        ('maps_usgs', None, 'Maps'), 
         ('etree', 'music', 'etree'),
         ('software', 'cog', 'Software'),
         ('usfederalcourts', None, 'Court docs'),
@@ -109,26 +110,42 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
 
     rows: 
     <ul class="nav nav-pills">
-    {% for row_count in [10, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000] %}
+    {% for row_count in [100, 500, 1000, 5000, 10000, 50000] %}
         {% if row_count == rows %}<li class="active">{% else %}<li>{% endif %}
         <a href="?{{changequery({'rows': row_count })}}">{{ row_count }}</a></li>
     {% endfor %}
     </ul>
 
-
-{% if results %}
-
-        {{ comma(results.response.numFound) }} items found
-        in {{ '%.4f' | format(t_solr) }} seconds<p>
-{% endif %}
-
 <form action="{{url_for('grid_page')}}" method="get">
 
-<input type="hidden" name="sort" value="{{ request.args.sort }}">
-<input type="hidden" name="fields" value="{{ request.args.fields }}">
-<input type="hidden" name="field_set" value="{{ request.args.field_set }}">
+{% for f in ('sort', 'fields', 'field_set') %}
+    {% set v = request.args.get(f) %}
+    {% if v %}
+        <input type="hidden" name="{{ f }}" value="{{ v }}">
+    {% endif %}
+{% endfor %}
+
+<input name="q" class="input-xlarge" value="{{q or ''}}">
+<input type="submit" value="Search" class="btn-primary">
+<p>
+
+{% if results %}
+    Query: {{ search_query }}<p>
+
+    {{ comma(results.response.numFound) }} items found,
+    {% if results.stats.stats_fields.item_size.sum %}
+        {{ fmt_filesize(results.stats.stats_fields.item_size.sum) }} total size, 
+    {% endif %}
+    {% if results.stats.stats_fields.downloads.sum %}
+        {{ comma(results.stats.stats_fields.downloads.sum) }} total downloads,
+    {% endif %}
+    in {{ '%.4f' | format(t_solr) }} seconds
+
+    <a href="{{url_for('identifier_list') + '?' + changequery({})}}">export identifier list</a><p>
+{% endif %}
 
 <table class="table table-striped table-bordered table-condensed draggable">
+
 {% if facet_row %}
 <tr>
 <td></td>
@@ -153,7 +170,8 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
 </tr>
 {% endif %}
 <tr>
-<td></td>
+<td>
+</td>
 {% for f in fields %}
 <th>{{ f if f != 'date_str' else 'date' }}{% if f != 'identifier' %} <a href="?{{zap_field(fields, f)}}">&times;</a>{% endif %}
 {% if f in single_value_fields %}
@@ -168,14 +186,16 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
     </strong>
     {% endif %}
 {% endif %}
-{% if results and (f in results.facet_counts.facet_fields or f + '_facet' in results.facet_counts.facet_fields) %}
+{% if results and (f in facet_fields or f + '_facet' in facet_fields) %}
 <a href="{{ url_for('facet_page', field=f) }}?{{changequery({})}}"><img src="http://www.us.archive.org/images/histogram-icon.gif"></a>
 {% endif %}
 </th>
 {% endfor %}
 </tr>
 <tr>
-<td><input type="submit" value="Search" class="btn-primary"></td>
+<td>
+<input type="submit" value="Search" class="btn-primary">
+</td>
 {% for f in fields %}
 {% set f_name = f if f != 'date_str' else 'date' %}
 <td><input class="filterbox" name="{{ f_name }}" value="{{ request.args.get(f_name, '')}}"></td>
@@ -192,9 +212,12 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
 {% for f in fields %}
 <td>
     {% if f == 'identifier' %}
-        {% if 'tvarchive' in doc.collection %}<span class="nowrap">{% endif %}
+        {% if 'tvarchive' in doc.collection %}{% endif %}
         <a href="{{ details }}" class="nowrap">{{ doc.identifier }}</a>
-        {% if doc.thumb_path and (doc.noindex or doc.get('access-restricted')) %}<br>{% endif %}
+        {% if doc.thumb_path and ((doc.identifier in catalog_rows) or doc.noindex or doc.get('access-restricted')) %}<br>{% endif %}
+        {% if catalog_rows.get(doc.identifier) == 2 %}
+            <span class="label nowrap label-important">red row</span>
+        {% endif %}
         {% if doc.noindex %}<span class="label label-warning">noindex</span>{% endif %}
         {% if doc.get('access-restricted') %}<span class="label label-warning">restricted</span>{% endif %}
         {% if 'tvarchive' in doc.collection %}</span>{% endif %}
@@ -204,47 +227,46 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
             {% if doc.mediatype in mediatype_icons %}<i class="icon-{{mediatype_icons[doc.mediatype]}}"></i>{% endif %}
             {{ doc.mediatype }}
             {% set v = doc.mediatype %}
-            <div class="nowrap"><a href="?{{changequery({f: request.args.get(f, '') + '"%s"' % solr_esc(v)})}}"><i class="icon-plus-sign" alt="+"></i></a><a href="?{{changequery({f: request.args.get(f, '') + '-"%s"' % solr_esc(v)})}}"><i class="icon-minus-sign" alt="-"></i></a></div>
+            <a href="?{{changequery({f: request.args.get(f, '') + '"%s"' % solr_esc(v)})}}"><i class="icon-plus-sign" alt="+"></i></a><a href="?{{changequery({f: request.args.get(f, '') + '-"%s"' % solr_esc(v)})}}"><i class="icon-minus-sign" alt="-"></i></a>
         {% else %}
             <span class="label label-important">missing</span>
         {% endif %}
     {% elif f == 'title' %}
         {% set title = doc.title %}
         {% if len(doc.title) < 50 %}
-            <div class="nowrap">{{ title }}</div>
+            <span class="nowrap">{{ title }}</span>
         {% elif len(doc.title) > 80 %}
-            <div title="{{ title }}">{{ title | truncate(length=80) }}</div>
+            <span class="nowrap" title="{{ title }}">{{ title | truncate(length=80) }}</span>
         {% else %}
-            {{ title }}
+            <span class="nowrap">{{ title }}</span>
         {% endif %}
-    {% elif f.startswith('description') and 'tvarchive' in doc.collection %}
-        <div class="nowrap">{{ doc[f] }}</div>
+    {% elif f.startswith('description') %}
+        {% if 'tvarchive' in doc.collection %}
+            <span class="nowrap">{{ doc[f] | truncate(length=80) }}</span>
+        {% else %}
+            {{ doc[f] | truncate(length=120) }}
+        {% endif %}
     {% elif f == 'item_size' %}
         {% if f in doc %}
             {{ fmt_filesize(doc[f]) }}
         {% endif %}
     {% elif f not in single_value_fields %}
-        <div style="display:inline-block">
         {% set values = doc.get(f, []) %}
         {% for v in values %}
             <span class="nowrap">{{v}}
-<a href="?{{changequery({f: request.args.get(f, '') + '"%s"' % solr_esc(v)})}}"><i class="icon-plus-sign" alt="+"></i></a><a href="?{{changequery({f: request.args.get(f, '') + '-"%s"' % solr_esc(v)})}}"><i class="icon-minus-sign" alt="-"></i></a>
-            </span>
+<a href="?{{changequery({f: request.args.get(f, '') + '"%s"' % solr_esc(v)})}}"><i class="icon-plus-sign" alt="+"></i></a><a href="?{{changequery({f: request.args.get(f, '') + '-"%s"' % solr_esc(v)})}}"><i class="icon-minus-sign" alt="-"></i></a></span>
         {% endfor %}
-        </div>
     {% elif f in ('publisher', 'scanningcenter') %}
-        <div style="display:inline-block">
         {% set v = doc.get(f) %}
         {% if v %}
         {{ v }}
-        <span class="nowrap"><a href="?{{changequery({f: request.args.get(f, '') + '"%s"' % v})}}"><i class="icon-plus-sign" alt="+"></i></a><a href="?{{changequery({f: request.args.get(f, '') + '-"%s"' % v})}}"><i class="icon-minus-sign" alt="-"></i></a></span>
+        <a href="?{{changequery({f: request.args.get(f, '') + '"%s"' % v})}}"><i class="icon-plus-sign" alt="+"></i></a><a href="?{{changequery({f: request.args.get(f, '') + '-"%s"' % v})}}"><i class="icon-minus-sign" alt="-"></i></a>
         {% endif %}
-        </div>
     {% elif f == 'downloads' %}
         {{ comma(doc.get(f, 0)) }}
     {% elif doc.get(f) %}
         {% if isinstance(doc[f], basestring) and len(doc[f]) < 60 %}
-            <span class="nowrap">{{ doc[f] }}</span>
+            {{ doc[f] }}
         {% else %}
             {{ doc[f] }}
         {% endif %}

@@ -20,7 +20,9 @@
     Query: 
     {% for k,v in search_fields %}
     {{ k }}={{v}}{% if not loop.last %}, {% endif %}
-    {% endfor %}<br>
+    {% endfor %}<p>
+
+    {{ comma(total) }} matching items, {{ comma(counts | length) }} unique values in {{ field }} field<p>
 
     <table>
     {% for value, count in counts %}
