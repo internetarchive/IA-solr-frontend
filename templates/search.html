@@ -15,6 +15,7 @@ body {
 .facet_count { color: #888; }
 .active .facet_count { color: white; }
 img.thumb { max-width: 300px; max-height: 300px; overflow: hidden; }
+span.hightlight { background: yellow; padding: 2px; }
 
 </style>
 
@@ -128,7 +129,7 @@ function hide_filter(filter) {
                 {% for line in token.splitlines() if line %}
                     {{ line }}{% if not loop.last %}<br>{% endif %}
                 {% endfor %}
-            {% else %}<strong>{{ token }}</strong>{% endif %}
+            {% else %}<span class="hightlight">{{ token }}</span>{% endif %}
         {% endfor %}
         {% if field in doc and hl_desc2[-20:] != doc[field][-20:] %}&hellip;{% endif %}
     {% elif doc[field] %}
@@ -144,17 +145,18 @@ function hide_filter(filter) {
 {% macro facet_list(fc, k) %}
     {% if fc.get(k) %}
         {% set facet_heading = facet_heading_label[k] if k in facet_heading_label else k.replace('_facet', '') %}
-        <ul class="nav nav-list">
-        <li class="nav-header">{{ facet_heading }}</li>
+        <h3>{{ facet_heading }}</h3>
+        <div class="nav-list">
         {% for key, count in fc[k] %}
             {% if key == facet_args_dict.get(k) %}
-                <li class="active"><a href="?{{changequery({'page':None,k:None})}}">{{ facet_label(k, key) }}
+                <div class="active"><a href="?{{changequery({'page':None,k:None})}}">
             {% else %}
-                <li><a href="?{{changequery({'page':None,k:key})}}">{{- facet_label(k, key) }}
+                <div><a href="?{{changequery({'page':None,k:key})}}">
             {% endif %}
-            <span class="facet_count">{{ comma(count) }}</span></a></li>
+            {{ facet_label(k, key) }}</a>
+            <span class="facet_count">{{ comma(count) }}</span></div>
         {% endfor %}
-        </ul>
+        </div>
     {% endif %}
 {% endmacro %}
 
@@ -169,16 +171,14 @@ function hide_filter(filter) {
         {% endfor %}
 
         {% if results.facet_counts.facet_ranges.date.counts %}
-            <ul class="nav nav-list">
-                <li class="nav-header">decade</li>
+            <h3>decade</h3>
             {% for i in results.facet_counts.facet_ranges.date.counts | reverse %}
                 {% set start_year = int(i[0][:4]) %}
                 {% set end_year = 'now' if loop.first else start_year + year_gap %}
                 {% set end_year = start_year + year_gap %}
-                <li><a href="?{{changequery({'page':None,'date_facet':i[0][:4]})}}">{{start_year}}-{{end_year}}
-                <span class="facet_count">{{ comma(i[1]) }}</span></a></li>
+                <a href="?{{changequery({'page':None,'date_facet':i[0][:4]})}}">{{start_year}}-{{end_year}}</a>
+                <span class="facet_count">{{ comma(i[1]) }}</span><br>
             {% endfor %}
-            </ul>
         {% endif %}
 
         {% for k in facet_fields if k not in ('noindex', 'mediatype') %}
@@ -351,7 +351,7 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
             {% if 'case-name' in doc %}{{ doc['case-name'][0] }} - {%endif -%}
             {% if hl.title and hl.title[0].strip() %}
                 {% for token_type, token in token_hl(hl.title[0]) -%}
-                    {% if token_type == 'text' %}{{token}}{% else %}<strong>{{ token }}</strong>{% endif -%}
+                    {% if token_type == 'text' %}{{token}}{% else %}<span class="highlight">{{ token }}</span>{% endif -%}
                 {% endfor -%}
             {%- elif doc.title and doc.title.strip() -%}
                 {{ doc.title }}
@@ -361,7 +361,7 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
             {% if hl.creator %}
                 {% for creator in hl.creator %}
                     {% for token_type, token in token_hl(creator) %}
-                        {% if token_type == 'text' %}{{token}}{% else %}<strong>{{ token }}</strong>{% endif %}
+                        {% if token_type == 'text' %}{{token}}{% else %}<span class="hightlight">{{ token }}</span>{% endif %}
                     {% endfor %}
                 {% endfor %}
             {% else %}
@@ -438,7 +438,7 @@ Search instead for <a href="?{{changequery({'nfpr': 1})}}">{{ request.args['q'] 
                 {% for s in hl.subject %}
                     <a href="?{{changequery({'page':None,'subject_facet':s.replace('{{{', '').replace('}}}','')})}}">
                     {% for token_type, token in token_hl(s) %}
-                        {% if token_type == 'text' %}{{token}}{% else %}<strong>{{ token }}</strong>{% endif %}
+                        {% if token_type == 'text' %}{{token}}{% else %}<span class="hightlight">{{ token }}</span>{% endif %}
                     {% endfor %}</a>{% if not loop.last %}; {% endif %}
                 {% endfor %}
             {% else %}

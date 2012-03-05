@@ -127,6 +127,15 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
 
 <input name="q" class="input-xlarge" value="{{q or ''}}">
 <input type="submit" value="Search" class="btn-primary">
+
+<a href="?{{changequery({'wait_admin':0})}}">show green rows</a>
+| <a href="?{{changequery({'wait_admin':1})}}">show blue rows</a>
+| <a href="?{{changequery({'wait_admin':2})}}">show red rows</a>
+| <a href="?{{changequery({'wait_admin':9})}}">show brown rows</a>
+| <a href="?{{changequery({'wait_admin':'*'})}}">show all items in catalog</a>
+{% if 'wait_admin' in request.args %}
+| <a href="?{{changequery({'wait_admin':None})}}">remove catalog filter</a>
+{% endif %}
 <p>
 
 {% if results %}
@@ -149,6 +158,7 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
 {% if facet_row %}
 <tr>
 <td></td>
+<td></td>
 {% for f in fields %}
 {% if f in results.facet_counts.facet_fields %}
     {% set facet_field = f %}
@@ -170,8 +180,7 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
 </tr>
 {% endif %}
 <tr>
-<td>
-</td>
+<td></td>
 {% for f in fields %}
 <th>{{ f if f != 'date_str' else 'date' }}{% if f != 'identifier' %} <a href="?{{zap_field(fields, f)}}">&times;</a>{% endif %}
 {% if f in single_value_fields %}
@@ -215,8 +224,19 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
         {% if 'tvarchive' in doc.collection %}{% endif %}
         <a href="{{ details }}" class="nowrap">{{ doc.identifier }}</a>
         {% if doc.thumb_path and ((doc.identifier in catalog_rows) or doc.noindex or doc.get('access-restricted')) %}<br>{% endif %}
-        {% if catalog_rows.get(doc.identifier) == 2 %}
-            <span class="label nowrap label-important">red row</span>
+        {% if doc.identifier in catalog_rows %}
+            {% if 2 in catalog_rows.get(doc.identifier) %}
+                <span class="label nowrap label-important">red row</span>
+            {% endif %}
+            {% if 1 in catalog_rows.get(doc.identifier) %}
+                <span class="label nowrap label-info">blue row</span>
+            {% endif %}
+            {% if 0 in catalog_rows.get(doc.identifier) %}
+                <span class="label nowrap label-success">green row</span>
+            {% endif %}
+            {% if 9 in catalog_rows.get(doc.identifier) %}
+                <span class="label nowrap">brown row</span>
+            {% endif %}
         {% endif %}
         {% if doc.noindex %}<span class="label label-warning">noindex</span>{% endif %}
         {% if doc.get('access-restricted') %}<span class="label label-warning">restricted</span>{% endif %}

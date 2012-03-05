@@ -3,6 +3,7 @@ from urllib import urlopen, quote_plus, urlencode
 from pprint import pprint, pformat
 import json, locale, sys, re
 from werkzeug import Headers
+from collections import defaultdict
 
 import MySQLdb
 from subprocess import Popen, PIPE
@@ -69,8 +70,7 @@ def get_catalog_rows():
     cur.execute('select identifier, wait_admin from catalog')
     return cur.fetchall()
 
-grid_params = set(('field_set', 'fields',
-    'sort', 'page', 'rows', 'wait_admin'))
+grid_params = set(('field_set', 'fields', 'sort', 'page', 'rows', 'q'))
 
 facet_fields = ['noindex', 'mediatype', 'collection_facet', 'language_facet',
     'creator_facet', 'subject_facet', 'publisher_facet', 'licenseurl',
@@ -96,7 +96,7 @@ single_value_fields = set(['identifier', 'title', 'date', 'date_str',
     'possible-copyright-status', 'copyright-evidence', 'copyright-region',
     'licenseurl', 'source', 'tuner', 'previous_item', 'next_item',
     'video_codec', 'audio_codec', 'sample', 'frames_per_second',
-    'start_localtime', 'curation',
+    'start_localtime', 'curation', 'camera',
     'start_time', 'stop_time', 'utf_offset', 'runtime', 'aspect_ratio',
     'scanfee', 'tv_channel', 'tv_category', 'tv_program', 'tv_episode_name',
     'tv_original_year', 'identifier-access', 'identifier-ark', 'venue',
@@ -211,7 +211,8 @@ field_set = {
         'drg_utm_northening', 'drg_sector', 'publicdate', 'description',
         'createddate', 'year_created', 'year_modified',
         ],
-    'us_patents': ['patent_number', 'inventor', 'epc_classificaiton'],
+    'us_patents': ['patent_number', 'inventor', 'ipc_classificaiton',
+        'epc_classificaiton'],
     'ourmedia': ['intended_purpose', 'is_clip', 'date_created', 'audio_type',
             'video_type', 'format', 'author', 'monochromatic', 'postedby',
             'releasedate', 'intended_purpose', 'suitable_ages', 'language_used',
@@ -299,7 +300,7 @@ solr_hl = '&hl=true' + \
     '&f.closed_captions.hl.maxAlternateFieldLength=200' + \
     '&hl.fl=title,creator,subject,collection,description,case-name,closed_captions&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}')
 
-#addr = 'localhost:6081'
+cache_addr = 'localhost:6081'
 addr = 'ol-search-inside:8984'
 solr_select_url = 'http://' + addr + '/solr/select'
 solr_select_params = 'wt=json' + \
@@ -491,12 +492,15 @@ def get_movie_thumb(identifier):
         host, path = find_item(identifier)
     except FindItemError:
         return
-    for line in urlopen('http://' + host + path):
-        m = re_thumb_dir_link.match(line)
-        if m:
-            thumb_dir = m.group(1)
-            break
-    else:
+    try:
+        for line in urlopen('http://' + host + path):
+            m = re_thumb_dir_link.match(line)
+            if m:
+                thumb_dir = m.group(1)
+                break
+        else:
+            return
+    except IOError:
         return
     thumbs = []
     for line in urlopen('http://' + host + path + '/' + thumb_dir):
@@ -663,17 +667,24 @@ def search(q, url_params, spellcheck=False, facets=False,
     if sort:
         params += '&sort=' + quote(sort)
     t0_solr = time()
-    f = urlopen(solr_select_url, solr_select_params)
+    if len(params) < 1024:
+        print params
+        f = urlopen('http://' + cache_addr + '/solr/select?' + params)
+    else:
+        f = urlopen(solr_select_url, params)
     reply = f.read()
     t_solr = time() - t0_solr
     try:
         results = json.loads(reply)
     except ValueError:
         raise SolrError(reply)
+    url = solr_select_url + '?' + params
     return {'url': url, 'results': results, 't_solr': t_solr}
 
 re_to_esc = re.compile(r'[\[\]:()]')
 def esc(s):
+    if s == 'NULL':
+        return '-[* TO *]'
     if not isinstance(s, basestring):
         return s
     return re_to_esc.sub(lambda m:'\\' + m.group(), s)
@@ -753,11 +764,13 @@ prefixes are used (Mebi, Gibi).
 
 def grid_field(f):
     v = request.args[f]
+    if f == 'wait_admin':
+        return (f, v)
     if f in ('date_str', 'date'):
         return ('date_str', esc(v))
     m = re_convert_to_range.match(v)
     if not m:
-        return (f, v)
+        return (f, v if v != 'NULL' else '-[* TO *]')
     if m.group(1) == '<':
         return (f, '[* TO ' + m.group(2) + ']')
     else:
@@ -839,9 +852,22 @@ def test_args():
     with app.test_request_context('/'):
         request.args
 
-def build_fq_and_search_fields():
-    search_fields = [grid_field(f) for f in request.args.iterkeys() if f not in grid_params]
+def parse_search_fields(search_fields, all_catalog_rows):
+    def fq_wait_admin(num):
+        if num == '*':
+            catalog_rows = [identifier for identifier, wait_admin
+                in all_catalog_rows]
+        else:
+            catalog_rows = [identifier for identifier, wait_admin 
+                in all_catalog_rows if wait_admin==int(num)]
 
+        if catalog_rows:
+            return '&fq={!lucene q.op=OR} identifier:(' + ' '.join(catalog_rows) + ')'
+        else:
+            return ''
+
+    print search_fields
+    return ''.join(('&fq=' + quote('%s:(%s)' % i)) if i[0] != 'wait_admin' else fq_wait_admin(i[1]) for i in search_fields)
 
 @app.route("/facet/<field>")
 def facet_page(field):
@@ -856,7 +882,9 @@ def facet_page(field):
     #search_fields = [grid_field(f) for f in all_fields if request.args.get(f)]
     search_fields = [grid_field(f)
             for f in request.args.iterkeys() if f not in grid_params]
-    fq = ''.join('&fq=' + quote('%s:(%s)' % i) for i in search_fields)
+    all_catalog_rows = get_catalog_rows() if request.args.get('wait_admin') else None
+    fq = parse_search_fields(search_fields, all_catalog_rows)
+
     q = '*:*'
     url_params = fq
     url_params += '&facet=true&facet.mincount=1&facet.limit=-1&facet.sort=count' 
@@ -995,8 +1023,8 @@ def grid_page():
     if request.query_string != new_query_string:
         return redirect(url_for('grid_page') + '?' + new_query_string)
 
-    if request.args.get('wait_admin'):
-        return catalog_page(int(request.args['wait_admin']))
+    #if request.args.get('wait_admin'):
+    #    return catalog_page(int(request.args['wait_admin']))
 
     page = int(request.args.get('page', 1))
 
@@ -1012,9 +1040,10 @@ def grid_page():
     rows = int(request.args.get('rows', 100))
     start = rows * (page-1)
 
+    q = request.args.get('q', '*:*').strip()
     search_fields = [grid_field(f) for f in request.args.iterkeys() if f not in grid_params]
 
-    if not search_fields:
+    if not search_fields and not request.args.get('q'):
         return render_template('grid.html', changequery=changequery,
             field_set=field_set, zap_field=zap_field, page=page, fields=fields,
             results=[], results_per_page=rows, 
@@ -1024,9 +1053,13 @@ def grid_page():
             solr_esc=esc, isinstance=isinstance, basestring=basestring, rows=rows,
             fmt_filesize=fmt_filesize)
 
-    catalog_rows = dict(get_catalog_rows())
+    all_catalog_rows = get_catalog_rows()
+    fq = parse_search_fields(search_fields, all_catalog_rows)
 
-    fq = ''.join('&fq=' + quote('%s:(%s)' % i) for i in search_fields)
+    catalog_rows = defaultdict(set)
+    for k, v in all_catalog_rows:
+        catalog_rows[k].add(v)
+
     search_query = ', '.join(k + '=' + v for k, v in search_fields)
 
     url_params = '&start=%d' % start + fq
@@ -1041,7 +1074,6 @@ def grid_page():
         if f not in cur_fields:
             cur_fields.append(f)
 
-    q = request.args.get('q', '*:*')
     debug = request.args.get('debug')
     sort = request.args.get('sort')
     try:
