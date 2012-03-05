@@ -6,6 +6,13 @@
 {# Copyright(c)2012 Internet Archive. Software license GPL version 2. #}
 {# Written by Edward Betts <edward@archive.org> #}
 <script language="javascript" type="text/javascript" src="http://edward.openlibrary.org/javascript/jquery/jquery.js"></script>
+<script>
+function show_more(show_link, row_field) {
+    $('span#' + row_field).show();
+    $(show_link).hide();
+    return false;
+}
+</script>
 
 <link href="{{url_for('static', filename='bootstrap/css/bootstrap.css')}}" rel="stylesheet">
 
@@ -142,10 +149,10 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
     Query: {{ search_query }}<p>
 
     {{ comma(results.response.numFound) }} items found,
-    {% if results.stats.stats_fields.item_size.sum %}
+    {% if results.stats and results.stats.stats_fields.item_size.sum %}
         {{ fmt_filesize(results.stats.stats_fields.item_size.sum) }} total size, 
     {% endif %}
-    {% if results.stats.stats_fields.downloads.sum %}
+    {% if results.stats and results.stats.stats_fields.downloads.sum %}
         {{ comma(results.stats.stats_fields.downloads.sum) }} total downloads,
     {% endif %}
     in {{ '%.4f' | format(t_solr) }} seconds
@@ -182,7 +189,7 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
 <tr>
 <td></td>
 {% for f in fields %}
-<th>{{ f if f != 'date_str' else 'date' }}{% if f != 'identifier' %} <a href="?{{zap_field(fields, f)}}">&times;</a>{% endif %}
+<th><span class="fieldname">{{ f if f != 'date_str' else 'date' }}</span>{% if f != 'identifier' %} <a href="?{{zap_field(fields, f)}}">&times;</a>{% endif %}
 {% if f in single_value_fields %}
     <strong>
     {% set sort = request.args.sort %}
@@ -196,7 +203,7 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
     {% endif %}
 {% endif %}
 {% if results and (f in facet_fields or f + '_facet' in facet_fields) %}
-<a href="{{ url_for('facet_page', field=f) }}?{{changequery({})}}"><img src="http://www.us.archive.org/images/histogram-icon.gif"></a>
+<a href="{{ url_for('facet_page', field=f) }}?{{changequery({})}}"><img src="/static/img/histogram-icon.gif"></a>
 {% endif %}
 </th>
 {% endfor %}
@@ -213,12 +220,14 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
 {% for doc in (results.response.docs if results else []) %}
 {% set details = "http://www.archive.org/details/" + doc.identifier %}
 <tr>
+    {% set row_index = loop.index %}
 <td>
 {% if doc.thumb_path %}
     <a href="{{ details }}"><img class="thumb" src="http://www.archive.org/download/{{ doc.identifier }}/{{ doc.thumb_path }}"></a>
 {% endif %}
 </td>
 {% for f in fields %}
+{% set id = 'row' + str(row_index) + '_' + f %}
 <td>
     {% if f == 'identifier' %}
         {% if 'tvarchive' in doc.collection %}{% endif %}
@@ -261,11 +270,7 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
             <span class="nowrap">{{ title }}</span>
         {% endif %}
     {% elif f.startswith('description') %}
-        {% if 'tvarchive' in doc.collection %}
-            <span class="nowrap">{{ doc[f] | truncate(length=80) }}</span>
-        {% else %}
-            {{ doc[f] | truncate(length=120) }}
-        {% endif %}
+        <span class="nowrap">{{ doc[f] | truncate(length=80) }}</span>
     {% elif f == 'item_size' %}
         {% if f in doc %}
             {{ fmt_filesize(doc[f]) }}
@@ -273,9 +278,14 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
     {% elif f not in single_value_fields %}
         {% set values = doc.get(f, []) %}
         {% for v in values %}
-            <span class="nowrap">{{v}}
+            <span class="nowrap">{{ loop.index }}: {{v}}
 <a href="?{{changequery({f: request.args.get(f, '') + '"%s"' % solr_esc(v)})}}"><i class="icon-plus-sign" alt="+"></i></a><a href="?{{changequery({f: request.args.get(f, '') + '-"%s"' % solr_esc(v)})}}"><i class="icon-minus-sign" alt="-"></i></a></span>
+            {% if loop.index == 3 and not loop.last %}<a href="#" onclick="return show_more(this, '{{id}}');">&hellip;</a><span id="{{id}}" class="more">{% endif %}
         {% endfor %}
+        {% if values|length > 3 %}
+            </span>
+        {% endif %}
+
     {% elif f in ('publisher', 'scanningcenter') %}
         {% set v = doc.get(f) %}
         {% if v %}
@@ -315,6 +325,7 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
     {% for plugin in ['modal', 'transition', 'tooltip', 'popover', 'dropdown'] %}
     <script src="{{url_for('static', filename='bootstrap/js/bootstrap-' + plugin + '.js')}}"></script>
     {% endfor %}
+    <script>$($('span.more').hide())</script>
 
 </body>
 </html>
