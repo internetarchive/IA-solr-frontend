@@ -12,6 +12,11 @@ function show_more(show_link, row_field) {
     $(show_link).hide();
     return false;
 }
+
+function check_all(i) {
+    $('input[name="selected"]').attr('checked', $(i).is(':checked'));
+}
+
 </script>
 
 <link href="{{url_for('static', filename='bootstrap/css/bootstrap.css')}}" rel="stylesheet">
@@ -133,7 +138,15 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
 {% endfor %}
 
 <input name="q" class="input-xlarge" value="{{q or ''}}">
+
+rows: <select name="rows">
+{% for i in [100, 500, 1000, 5000] %}
+<option value="{% if i != 100 %}{{ i }}{% endif %}"{% if i == rows %}selected{% endif %}>{{ i }}</option>
+{% endfor %}
+</select>
+
 <input type="submit" value="Search" class="btn-primary">
+<p>
 
 <a href="?{{changequery({'wait_admin':0})}}">show green rows</a>
 | <a href="?{{changequery({'wait_admin':1})}}">show blue rows</a>
@@ -148,13 +161,25 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
 {% if results %}
     Query: {{ search_query }}<p>
 
+    Operate on selections: 
+<input type="submit" name="f" value="QA" class="btn">
+<input type="submit" name="f" value="task" class="btn">
+<p>
+
     {{ comma(results.response.numFound) }} items found,
-    {% if results.stats and results.stats.stats_fields.item_size.sum %}
+    {% if results.stats and results.stats.stats_fields.item_size %}
         {{ fmt_filesize(results.stats.stats_fields.item_size.sum) }} total size, 
     {% endif %}
-    {% if results.stats and results.stats.stats_fields.downloads.sum %}
+    {% if results.stats and results.stats.stats_fields.downloads %}
         {{ comma(results.stats.stats_fields.downloads.sum) }} total downloads,
     {% endif %}
+    {% if results.stats and results.stats.stats_fields.imagecount %}
+        {{ comma(results.stats.stats_fields.imagecount.sum) }} total image count,
+    {% endif %}
+    {% if results.stats and results.stats.stats_fields.foldoutcount %}
+        {{ comma(results.stats.stats_fields.foldoutcount.sum) }} total foldout count,
+    {% endif %}
+
     in {{ '%.4f' | format(t_solr) }} seconds
 
     <a href="{{url_for('identifier_list') + '?' + changequery({})}}">export identifier list</a><p>
@@ -188,22 +213,25 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
 {% endif %}
 <tr>
 <td></td>
+<th>*</th>
 {% for f in fields %}
 <th><span class="fieldname">{{ f if f != 'date_str' else 'date' }}</span>{% if f != 'identifier' %} <a href="?{{zap_field(fields, f)}}">&times;</a>{% endif %}
-{% if f in single_value_fields %}
+{% if f in single_value_fields or f == 'collection' %}
     <strong>
     {% set sort = request.args.sort %}
+
+    {% if sort == f + ' asc'%}<span class="selected">&#x2b07;</span>{% else %}
+    <a href="?{{changequery({'page': None, 'sort': f + ' asc'})}}">&#x2b07;</a>
+    {% endif %}
+
     {% if sort == f + ' desc'%}<span class="selected">&#x2b06;</span>{% else %}
     <a href="?{{changequery({'page': None, 'sort': f + ' desc'})}}">&#x2b06;</a>
     {% endif %}
 
-    {% if sort == f + ' asc'%}<span class="selected">&#x2b07;</span>{% else %}
-    <a href="?{{changequery({'page': None, 'sort': f + ' asc'})}}">&#x2b07;</a>
     </strong>
-    {% endif %}
 {% endif %}
 {% if results and (f in facet_fields or f + '_facet' in facet_fields) %}
-<a href="{{ url_for('facet_page', field=f) }}?{{changequery({})}}"><img src="/static/img/histogram-icon.gif"></a>
+<a href="{{ url_for('facet_page', field=f) }}?{{changequery({})}}"><img src="http://www.us.archive.org/images/histogram-icon.gif"></a>
 {% endif %}
 </th>
 {% endfor %}
@@ -211,6 +239,9 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
 <tr>
 <td>
 <input type="submit" value="Search" class="btn-primary">
+</td>
+<td>
+<input type="checkbox" onclick="check_all(this)">
 </td>
 {% for f in fields %}
 {% set f_name = f if f != 'date_str' else 'date' %}
@@ -226,12 +257,15 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
     <a href="{{ details }}"><img class="thumb" src="http://www.archive.org/download/{{ doc.identifier }}/{{ doc.thumb_path }}"></a>
 {% endif %}
 </td>
+<td><input type="checkbox" name="selected" value="{{doc.identifier}}">
+</td>
 {% for f in fields %}
 {% set id = 'row' + str(row_index) + '_' + f %}
 <td>
     {% if f == 'identifier' %}
         {% if 'tvarchive' in doc.collection %}{% endif %}
         <a href="{{ details }}" class="nowrap">{{ doc.identifier }}</a>
+        (<a href="http://www.archive.org/catalog.php?history=1&identifier={{doc.identifier}}">history</a>)
         {% if doc.thumb_path and ((doc.identifier in catalog_rows) or doc.noindex or doc.get('access-restricted')) %}<br>{% endif %}
         {% if doc.identifier in catalog_rows %}
             {% if 2 in catalog_rows.get(doc.identifier) %}
@@ -249,7 +283,6 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
         {% endif %}
         {% if doc.noindex %}<span class="label label-warning">noindex</span>{% endif %}
         {% if doc.get('access-restricted') %}<span class="label label-warning">restricted</span>{% endif %}
-        {% if 'tvarchive' in doc.collection %}</span>{% endif %}
 </td>
     {% elif f == 'mediatype' %}
         {% if doc.mediatype %}
@@ -269,7 +302,7 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
         {% else %}
             <span class="nowrap">{{ title }}</span>
         {% endif %}
-    {% elif f.startswith('description') %}
+    {% elif f.startswith('description') or f.startswith('case-name') %}
         <span class="nowrap">{{ doc[f] | truncate(length=80) }}</span>
     {% elif f == 'item_size' %}
         {% if f in doc %}
@@ -277,13 +310,17 @@ img.thumb { max-width: 80px; max-height: 80px; overflow: hidden; }
         {% endif %}
     {% elif f not in single_value_fields %}
         {% set values = doc.get(f, []) %}
-        {% for v in values %}
-            <span class="nowrap">{{ loop.index }}: {{v}}
-<a href="?{{changequery({f: request.args.get(f, '') + '"%s"' % solr_esc(v)})}}"><i class="icon-plus-sign" alt="+"></i></a><a href="?{{changequery({f: request.args.get(f, '') + '-"%s"' % solr_esc(v)})}}"><i class="icon-minus-sign" alt="-"></i></a></span>
-            {% if loop.index == 3 and not loop.last %}<a href="#" onclick="return show_more(this, '{{id}}');">&hellip;</a><span id="{{id}}" class="more">{% endif %}
-        {% endfor %}
-        {% if values|length > 3 %}
-            </span>
+        {% if isinstance(values, list) %}
+            {% for v in values %}
+                <span class="nowrap">{{v}}
+    <a href="?{{changequery({f: request.args.get(f, '') + '"%s"' % solr_esc(v)})}}"><i class="icon-plus-sign" alt="+"></i></a><a href="?{{changequery({f: request.args.get(f, '') + '-"%s"' % solr_esc(v)})}}"><i class="icon-minus-sign" alt="-"></i></a></span>
+                {% if loop.index == 3 and not loop.last %}<a href="#" onclick="return show_more(this, '{{id}}');">&hellip;</a><span id="{{id}}" class="more">{% endif %}
+            {% endfor %}
+            {% if values|length > 3 %}
+                </span>
+            {% endif %}
+        {% else %}
+            {{ values }}
         {% endif %}
 
     {% elif f in ('publisher', 'scanningcenter') %}

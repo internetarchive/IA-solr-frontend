@@ -77,7 +77,9 @@ facet_fields = ['noindex', 'mediatype', 'collection_facet', 'language_facet',
     'possible-copyright-status', 'rating_facet', 'sponsor_facet',
     'handwritten', 'tv_channel', 'tv_category', 'tv_program', 
     'tv_episode_name', 'tv_original_year', 'tv_starring',
-    'court', 'curatestate', 'item_file_format' ]
+    'court']
+
+#    'court', 'curatestate', 'item_file_format' ]
 
 fl = ['identifier', 'creator', 'title', 'date', 'subject', 'collection',
     'scanner', 'mediatype', 'description', 'noindex', 'score', 'case-name',
@@ -300,13 +302,14 @@ solr_hl = '&hl=true' + \
     '&f.closed_captions.hl.maxAlternateFieldLength=200' + \
     '&hl.fl=title,creator,subject,collection,description,case-name,closed_captions&hl.simple.pre=' + quote('{{{') + '&hl.simple.post=' + quote('}}}')
 
-cache_addr = 'localhost:6081'
-addr = 'ol-search-inside:8984'
+cache_addr = 'vm-se-test:6081'
+addr = 'vm-se-test:8983'
+
 solr_select_url = 'http://' + addr + '/solr/select'
 solr_select_params = 'wt=json' + \
     '&json.nl=arrarr' + \
     '&defType=edismax' + \
-    '&qf=text+closed_captions' + \
+    '&qf=text+closed_captions+item_file_text' + \
     '&f.description.hl.fragsize=200' + \
     '&f.closed_captions.hl.fragsize=400' + \
     '&bq=' + quote('(*:* -collection:ourmedia -collection:opensource* collection:*)^10') + \
@@ -1096,8 +1099,8 @@ def grid_page():
         field_set=field_set, zap_field=zap_field, page=page, fields=fields,
         results=results, results_per_page=rows, pager=pager, t_solr=t_solr,
         quote=quote, comma=comma, len=len, list_fields=list_fields, 
-        catalog_rows=catalog_rows,
-        facet_fields=facet_fields,
+        catalog_rows=catalog_rows, list=list,
+        facet_fields=facet_fields, str=str,
         single_value_fields=single_value_fields, int=int,
         solr_esc=esc, isinstance=isinstance, basestring=basestring, rows=rows,
         fmt_filesize=fmt_filesize, search_fields=search_fields, search_query=search_query)
